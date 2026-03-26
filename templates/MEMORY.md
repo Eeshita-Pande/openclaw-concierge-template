@@ -21,6 +21,7 @@ Curated finds delivered daily at 6pm ({{timezone}}):
 - Quality > quantity — 0 sent is better than 1 weak send
 
 ## Session Topics (Telegram)
+If Telegram is configured:
 - **General** — default topic
 - **Discovery** — topic:{{topic_discovery}}
 - **Journal** — topic:{{topic_journal}}

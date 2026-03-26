@@ -10,17 +10,17 @@ A template for setting up a personal AI concierge powered by [OpenClaw](https://
 |---------|-------------|----------|
 | **Journal** | One sharp observation + question based on your recent activity | 10pm daily |
 | **Discovery** | 1-2 curated finds (restaurants, articles, fashion, travel) | 6pm daily |
-| **Restaurant Booking** | Automated OpenTable reservations via browser automation | On demand |
+| **Restaurant Booking** | Automated OpenTable reservations via browser automation | Weekly check (Sunday noon) + on demand |
 | **Fabric Sync** | Pulls your Google searches, Instagram, YouTube into memory | 9am daily |
 
-All outputs are delivered to organized Telegram group topics.
+Outputs can optionally be delivered to organized Telegram group topics.
 
 ## Prerequisites
 
 1. **OpenClaw** installed and running ([docs.openclaw.ai](https://docs.openclaw.ai))
 2. **Fabric account** with API credentials ([developer.onfabric.io](https://developer.onfabric.io))
-3. **Telegram bot** connected to OpenClaw
-4. **Telegram group** with forum/topics enabled (your agent's home base)
+3. **Telegram bot** connected to OpenClaw (optional — for message delivery)
+4. **Telegram group** with forum/topics enabled (optional — your agent's home base)
 
 ---
 
@@ -32,9 +32,9 @@ All outputs are delivered to organized Telegram group topics.
 2. Follow the [Quick Start guide](https://developer.onfabric.io/quick-start) to connect your data sources (Google, Instagram)
 3. Note your **API Key**, **Account ID**, and **User ID** from the dashboard
 
-### Step 2: Telegram Group Topics
+### Step 2: Telegram Group Topics (Optional)
 
-Create a Telegram group with **Topics enabled** (Group Settings → Topics → On).
+If using Telegram delivery, create a group with **Topics enabled** (Group Settings → Topics → On).
 
 Create these 5 topics manually:
 - **General** (default topic — no ID needed)
@@ -48,7 +48,7 @@ To get each topic ID: open the topic in Telegram Web/Desktop, look at the URL �
 ### Step 3: Run Bootstrap
 
 ```bash
-git clone https://github.com/Eeshita-Pande/openclaw-concierge-template.git
+git clone <REPO_URL>
 cd openclaw-concierge-template
 
 ./bootstrap.sh \
@@ -57,7 +57,11 @@ cd openclaw-concierge-template
   --timezone "America/New_York" \
   --fabric-api-key "fab_xxx" \
   --fabric-account-id "acc_xxx" \
-  --fabric-user-id "usr_xxx" \
+  --fabric-user-id "usr_xxx"
+```
+
+Add Telegram flags if using Telegram delivery:
+```bash
   --telegram-group-id "-100xxxxxxxxxx" \
   --topic-discovery "3" \
   --topic-journal "5" \
@@ -71,7 +75,7 @@ This will:
 3. Pull your Fabric data and generate memory files + `USER.md`
 4. Install skills (journal, discovery, fabric, opentable-booking)
 5. Set up Chrome + Xvfb for browser automation
-6. Create cron jobs (discovery 6pm, journal 10pm, fabric-refresh 9am)
+6. Create cron jobs (discovery 6pm, journal 10pm, fabric-refresh 9am, weekly-booking-check Sunday noon)
 7. Write a post-setup checklist
 
 ### Step 4: Review USER.md
@@ -84,7 +88,7 @@ The bootstrap generates `USER.md` from your Fabric data — your interests, plac
 2. Verify crons: `openclaw cron list`
 3. Log into OpenTable via browser if you want restaurant booking (see `setup-checklist.md`)
 
-Your agent is live. Tonight you'll get your first discoveries at 6pm and journal reflection at 10pm.
+Your agent is live. Tonight you'll get your first discoveries at 6pm and journal reflection at 10pm. Weekly booking checks run every Sunday at noon.
 
 ---
 
@@ -107,7 +111,7 @@ workspace/
 │   ├── discovery/       # Curated finds skill
 │   ├── fabric/          # Fabric API integration
 │   ├── fabric-profile-builder/  # Full interest profile builder
-│   └── opentable-booking/  # OpenTable booking (from ClawHub)
+│   └── opentable-booking/  # OpenTable browser automation
 │
 ├── memory/
 │   ├── {user}/          # Your ground truth (from Fabric)
@@ -159,7 +163,7 @@ Installed automatically by the bootstrap:
 | `discovery` | Bundled | Curated finds curation |
 | `fabric` | Bundled | Fabric API integration |
 | `fabric-profile-builder` | Bundled | Build interest profiles from Fabric data |
-| `opentable-booking` | ClawHub | OpenTable browser automation |
+| `opentable-booking` | Bundled | OpenTable browser automation |
 
 ## License
 

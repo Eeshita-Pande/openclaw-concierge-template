@@ -9,7 +9,7 @@ A personal AI assistant that:
 - Curates **1-2 daily discoveries** (6pm) — restaurants, articles, travel, fashion
 - Books **restaurants via OpenTable** on demand (browser automation)
 - Syncs the user's **Fabric data** (Google searches, Instagram, YouTube) into memory every morning (9am)
-- Delivers everything to organized **Telegram group topics**
+- Optionally delivers everything to organized **Telegram group topics**
 
 ## Prerequisites
 
@@ -35,15 +35,10 @@ Ask the user for the following. Do not proceed until you have all required items
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | Agent name | The name the agent goes by | "Luna" |
-| User name | The user's first name | "Eeshita" |
+| User name | The user's first name | "Sarah" |
 | Timezone | IANA timezone | "Europe/London" |
 | Fabric API key | From developer.onfabric.io | "fab_..." |
 | Fabric User ID | From the Fabric dashboard | "usr_..." |
-| Telegram group ID | The group where the agent posts | "-100..." |
-| Topic: Discovery | Telegram topic ID for curated finds | "3" |
-| Topic: Journal | Telegram topic ID for journal reflections | "5" |
-| Topic: Booking | Telegram topic ID for booking confirmations | "7" |
-| Topic: Memory | Telegram topic ID for memory/diff updates | "9" |
 
 **Optional:**
 | Parameter | Description | Default |
@@ -51,16 +46,23 @@ Ask the user for the following. Do not proceed until you have all required items
 | Location | User's city | Derived from timezone |
 | Fabric Account ID | Only needed for some API calls | "" |
 | Workspace path | OpenClaw workspace location | `~/.openclaw/workspace` |
+| Telegram group ID | The group where the agent posts | "" (no Telegram) |
+| Topic: Discovery | Telegram topic ID for curated finds | "" |
+| Topic: Journal | Telegram topic ID for journal reflections | "" |
+| Topic: Booking | Telegram topic ID for booking confirmations | "" |
+| Topic: Memory | Telegram topic ID for memory/diff updates | "" |
 
-**How to get Telegram topic IDs:** Open the topic in Telegram Web/Desktop. The URL ends with `/{topic_id}`. The group must have Topics/Forum mode enabled (Group Settings > Topics > On). The user needs to create these topics manually: Discovery, Journal, Booking, Memory.
+**How to get Telegram topic IDs (if using Telegram):** Open the topic in Telegram Web/Desktop. The URL ends with `/{topic_id}`. The group must have Topics/Forum mode enabled (Group Settings > Topics > On). The user needs to create these topics manually: Discovery, Journal, Booking, Memory.
 
 **How to get Fabric credentials:** The user creates an account at [developer.onfabric.io](https://developer.onfabric.io), follows the Quick Start to connect data sources (Google, Instagram), then finds their API Key, Account ID, and User ID on the dashboard.
 
 ### Step 2: Clone This Repo to the Target Machine
 
+Clone this repo to the target machine (replace `<REPO_URL>` with the actual repository URL):
+
 ```bash
 cd /tmp
-git clone https://github.com/Eeshita-Pande/openclaw-concierge-template.git
+git clone <REPO_URL>
 cd openclaw-concierge-template
 ```
 
@@ -72,15 +74,11 @@ cd openclaw-concierge-template
   --user-name "<USER_NAME>" \
   --timezone "<TIMEZONE>" \
   --fabric-api-key "<FABRIC_API_KEY>" \
-  --fabric-user-id "<FABRIC_USER_ID>" \
-  --telegram-group-id "<TELEGRAM_GROUP_ID>" \
-  --topic-discovery "<TOPIC_DISCOVERY>" \
-  --topic-journal "<TOPIC_JOURNAL>" \
-  --topic-booking "<TOPIC_BOOKING>" \
-  --topic-memory "<TOPIC_MEMORY>"
+  --fabric-user-id "<FABRIC_USER_ID>"
 ```
 
 Add `--fabric-account-id`, `--location`, or `--workspace` if the user provided them.
+Add `--telegram-group-id`, `--topic-discovery`, `--topic-journal`, `--topic-booking`, `--topic-memory` if using Telegram delivery.
 
 The bootstrap script will:
 1. Create the memory folder structure in the workspace
@@ -89,7 +87,7 @@ The bootstrap script will:
 4. Store Fabric credentials securely
 5. Bootstrap memory from Fabric API data (interests, restaurants, travel, etc.)
 6. Install Chrome + Xvfb for browser automation
-7. Create cron jobs (discovery at 6pm, journal at 10pm, fabric-refresh at 9am)
+7. Create cron jobs (discovery at 6pm, journal at 10pm, fabric-refresh at 9am, weekly-booking-check Sunday noon)
 8. Write a post-setup checklist
 
 ### Step 4: Restart the Gateway
@@ -116,6 +114,7 @@ Expected crons:
 - `evening-discovery` — 6pm daily
 - `nightly-journal` — 10pm daily
 - `fabric-refresh` — 9am daily
+- `weekly-booking-check` — Sunday noon weekly
 
 ### Step 6: Browser Login for OpenTable (Optional)
 
@@ -130,7 +129,23 @@ openclaw browser screenshot
 
 The browser session persists across restarts.
 
-### Step 7: Review USER.md
+### Step 7: Build User Profile (Recommended)
+
+If Fabric credentials are configured, run the profile builder to create a comprehensive user profile:
+
+```bash
+cd ~/.openclaw/workspace
+python3 skills/fabric-profile-builder/scripts/run_pipeline.py \
+  --output-dir /tmp/fabric-profile \
+  --extraction-provider anthropic --extraction-model claude-haiku-4-5-20251001 \
+  --synthesis-provider anthropic --synthesis-model claude-sonnet-4-5-20250514
+```
+
+If the machine uses OpenAI instead of Anthropic, adjust the provider and model flags accordingly.
+
+This generates interest profiles across 10 categories and a comprehensive `USER.md`. Copy the generated `USER.md` to the workspace if it looks good.
+
+### Step 8: Review USER.md
 
 Open `~/.openclaw/workspace/USER.md` and review the auto-generated profile with the user. Fix anything that's wrong or missing — this file drives journal questions, discovery curation, and booking preferences.
 
@@ -142,6 +157,7 @@ If the gateway wasn't running during bootstrap, create them manually:
 openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce
 openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce
 openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '<TIMEZONE>' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'
+openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '<TIMEZONE>' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'
 ```
 
 ### Fabric bootstrap failed
@@ -177,6 +193,7 @@ skills/                         # Bundled skills
   journal/SKILL.md              # Nightly journal reflection
   fabric/SKILL.md               # Fabric API integration
   fabric-profile-builder/       # Full profile builder pipeline
+  opentable-booking/SKILL.md    # OpenTable browser automation
 scripts/
   bootstrap-fabric.py           # Initial Fabric data fetch
   fabric-sync.sh                # Daily Fabric sync

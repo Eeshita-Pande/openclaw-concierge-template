@@ -53,11 +53,6 @@ MISSING=()
 [ -z "$TIMEZONE" ] && MISSING+=("--timezone")
 [ -z "$FABRIC_API_KEY" ] && MISSING+=("--fabric-api-key")
 [ -z "$FABRIC_USER_ID" ] && MISSING+=("--fabric-user-id")
-[ -z "$TELEGRAM_GROUP_ID" ] && MISSING+=("--telegram-group-id")
-[ -z "$TOPIC_DISCOVERY" ] && MISSING+=("--topic-discovery")
-[ -z "$TOPIC_JOURNAL" ] && MISSING+=("--topic-journal")
-[ -z "$TOPIC_BOOKING" ] && MISSING+=("--topic-booking")
-[ -z "$TOPIC_MEMORY" ] && MISSING+=("--topic-memory")
 
 if [ ${#MISSING[@]} -gt 0 ]; then
   echo -e "${RED}Missing required arguments:${NC}"
@@ -70,7 +65,9 @@ if [ ${#MISSING[@]} -gt 0 ]; then
   echo "  --location \"New York\" \\"
   echo "  --fabric-api-key \"fab_xxx\" \\"
   echo "  --fabric-account-id \"acc_xxx\" \\"
-  echo "  --fabric-user-id \"usr_xxx\" \\"
+  echo "  --fabric-user-id \"usr_xxx\""
+  echo ""
+  echo "Optional Telegram flags:"
   echo "  --telegram-group-id \"-100xxxxxxxxxx\" \\"
   echo "  --topic-discovery \"3\" \\"
   echo "  --topic-journal \"5\" \\"
@@ -163,28 +160,6 @@ for skill_dir in "$SCRIPT_DIR/skills"/*/; do
   cp -r "$skill_dir"* "$WORKSPACE/skills/$skill_name/"
   echo -e "  ${GREEN}✓${NC} skills/$skill_name/"
 done
-
-# Install opentable-booking from ClawHub ZIP
-OPENTABLE_URL="https://wry-manatee-359.convex.site/api/v1/download?slug=opentable-booking"
-OPENTABLE_DIR="$WORKSPACE/skills/opentable-booking"
-if [ ! -f "$OPENTABLE_DIR/SKILL.md" ]; then
-  echo -e "  Downloading opentable-booking from ClawHub..."
-  mkdir -p "$OPENTABLE_DIR"
-  TMPZIP=$(mktemp /tmp/opentable-booking-XXXXXX.zip)
-  if curl -sL "$OPENTABLE_URL" -o "$TMPZIP" && unzip -qo "$TMPZIP" -d "$OPENTABLE_DIR" 2>/dev/null; then
-    # Unzip may create a nested dir — flatten if needed
-    if [ -d "$OPENTABLE_DIR/opentable-booking" ]; then
-      mv "$OPENTABLE_DIR/opentable-booking"/* "$OPENTABLE_DIR/"
-      rmdir "$OPENTABLE_DIR/opentable-booking"
-    fi
-    echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (ClawHub)"
-  else
-    echo -e "  ${YELLOW}⚠${NC} opentable-booking download failed — install manually later"
-  fi
-  rm -f "$TMPZIP"
-else
-  echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (already installed)"
-fi
 
 # ─── Step 4: Store Fabric Credentials ───────────────────────────
 
@@ -327,6 +302,12 @@ if [ -n "$OPENCLAW_CMD" ]; then
     sleep 2
   done
 
+  # Build announce flag if Telegram is configured
+  ANNOUNCE_FLAG=""
+  if [ -n "$TELEGRAM_GROUP_ID" ]; then
+    ANNOUNCE_FLAG="--announce"
+  fi
+
   # Evening discovery — 6pm daily
   $OPENCLAW_CMD cron add \
     --name "evening-discovery" \
@@ -334,7 +315,7 @@ if [ -n "$OPENCLAW_CMD" ]; then
     --tz "$TIMEZONE" \
     --session isolated \
     --message "Read and follow the discovery skill: skills/discovery/SKILL.md" \
-    --announce >/dev/null 2>&1 && \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
     echo -e "  ${GREEN}✓${NC} evening-discovery (6pm $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} evening-discovery — failed (create manually)"
 
@@ -345,7 +326,7 @@ if [ -n "$OPENCLAW_CMD" ]; then
     --tz "$TIMEZONE" \
     --session isolated \
     --message "Read and follow the journal skill: skills/journal/SKILL.md" \
-    --announce >/dev/null 2>&1 && \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
     echo -e "  ${GREEN}✓${NC} nightly-journal (10pm $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} nightly-journal — failed (create manually)"
 
@@ -359,12 +340,24 @@ if [ -n "$OPENCLAW_CMD" ]; then
     echo -e "  ${GREEN}✓${NC} fabric-refresh (9am $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} fabric-refresh — failed (create manually)"
 
+  # Weekly booking check — Sunday noon
+  $OPENCLAW_CMD cron add \
+    --name "weekly-booking-check" \
+    --cron "0 12 * * 0" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} weekly-booking-check (Sunday noon $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} weekly-booking-check — failed (create manually)"
+
 else
   echo -e "  ${YELLOW}⚠${NC} openclaw CLI not found — cron jobs must be created manually"
   echo -e "  ${BLUE}ℹ${NC}  After starting the gateway, run:"
   echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce"
   echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
   echo "    openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '$TIMEZONE' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'"
+  echo "    openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '$TIMEZONE' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'"
 fi
 
 # ─── Step 8: Post-setup Login Reminder ──────────────────────────
@@ -398,6 +391,7 @@ Expected:
 - evening-discovery (6pm ${TIMEZONE})
 - nightly-journal (10pm ${TIMEZONE})
 - fabric-refresh (9am ${TIMEZONE})
+- weekly-booking-check (Sunday noon ${TIMEZONE})
 
 ## Review USER.md
 

@@ -138,12 +138,16 @@ Your memory is organized by **ownership** (who generated the context):
 
 ## Platform-Specific: Telegram
 
+If Telegram is configured, route messages to the appropriate topics:
+
 **Session Topics:**
 - General → default topic (no ID)
 - Discovery updates → topic:{{topic_discovery}}
 - Journal reflections → topic:{{topic_journal}}
 - Booking confirmations → topic:{{topic_booking}}
 - Memory/Fabric diffs → topic:{{topic_memory}}
+
+If topic IDs are empty, deliver all messages to the default/general topic or skip Telegram delivery.
 
 ## Safety
 
