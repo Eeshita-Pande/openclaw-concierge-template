@@ -75,17 +75,31 @@ fi
 
 if [ ! -f "$WORKSPACE/.env.fabric" ]; then
   echo -e "${YELLOW}⚠  No .env.fabric found at $WORKSPACE/.env.fabric${NC}"
-  echo -e "  Create it with:"
-  echo "    FABRIC_API_KEY=<your_key>"
-  echo "    FABRIC_USER_ID=<your_user_id>"
+  echo -e "  Create it with: nano $WORKSPACE/.env.fabric"
   echo ""
+  echo "    FABRIC_API_KEY=<your_fabric_api_key>"
+  echo "    FABRIC_USER_ID=<your_fabric_user_id>"
+  echo "    OPENAI_API_KEY=<your_openai_api_key>"
+  echo ""
+  echo -e "  Then: chmod 600 $WORKSPACE/.env.fabric"
   echo -e "  Continuing without Fabric — memory bootstrapping will be skipped."
   FABRIC_AVAILABLE=false
 else
   FABRIC_AVAILABLE=true
   # shellcheck disable=SC1091
   source "$WORKSPACE/.env.fabric"
-  echo -e "  ${GREEN}✓${NC} Fabric credentials found"
+  if [ -z "${FABRIC_API_KEY:-}" ] || [ -z "${FABRIC_USER_ID:-}" ]; then
+    echo -e "  ${YELLOW}⚠${NC} .env.fabric found but FABRIC_API_KEY or FABRIC_USER_ID is empty"
+    FABRIC_AVAILABLE=false
+  else
+    echo -e "  ${GREEN}✓${NC} Fabric credentials found"
+  fi
+  if [ -n "${OPENAI_API_KEY:-}" ]; then
+    echo -e "  ${GREEN}✓${NC} OpenAI API key found"
+    export OPENAI_API_KEY
+  else
+    echo -e "  ${YELLOW}⚠${NC} No OPENAI_API_KEY — profile builder will not be available"
+  fi
 fi
 
 SETUP_DATE=$(date -u '+%Y-%m-%d')
@@ -433,10 +447,11 @@ Fill in any missing fields (name, timezone, location).
 Run the profile builder for a comprehensive user profile:
 \`\`\`
 cd ~/.openclaw/workspace
+source .env.fabric
 python3 skills/fabric-profile-builder/scripts/run_pipeline.py \\
   --output-dir /tmp/fabric-profile \\
-  --extraction-provider anthropic --extraction-model claude-haiku-4-5-20251001 \\
-  --synthesis-provider anthropic --synthesis-model claude-sonnet-4-5-20250514
+  --extraction-provider openai --extraction-model gpt-4o-mini \\
+  --synthesis-provider openai --synthesis-model gpt-4o
 \`\`\`
 CHECKLIST_EOF
 

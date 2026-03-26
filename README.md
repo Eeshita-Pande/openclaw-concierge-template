@@ -33,12 +33,17 @@ Outputs can optionally be delivered to organized Telegram group topics.
 Create an account at [developer.onfabric.io](https://developer.onfabric.io), connect data sources (Google, Instagram), then save your credentials on the machine:
 
 ```bash
-cat > ~/.openclaw/workspace/.env.fabric <<EOF
-FABRIC_API_KEY=your_api_key
-FABRIC_USER_ID=your_user_id
-EOF
-chmod 600 ~/.openclaw/workspace/.env.fabric
+nano ~/.openclaw/workspace/.env.fabric
 ```
+
+Add:
+```
+FABRIC_API_KEY=your_fabric_api_key
+FABRIC_USER_ID=your_fabric_user_id
+OPENAI_API_KEY=your_openai_api_key
+```
+
+Then: `chmod 600 ~/.openclaw/workspace/.env.fabric`
 
 ### Step 2: Run Bootstrap
 
@@ -64,10 +69,11 @@ This will:
 Run the profile builder to generate a comprehensive user profile, then review it:
 ```bash
 cd ~/.openclaw/workspace
+source .env.fabric
 python3 skills/fabric-profile-builder/scripts/run_pipeline.py \
   --output-dir /tmp/fabric-profile \
-  --extraction-provider anthropic --extraction-model claude-haiku-4-5-20251001 \
-  --synthesis-provider anthropic --synthesis-model claude-sonnet-4-5-20250514
+  --extraction-provider openai --extraction-model gpt-4o-mini \
+  --synthesis-provider openai --synthesis-model gpt-4o
 ```
 
 Review `USER.md` — this file drives everything (discoveries, journal questions, booking preferences).

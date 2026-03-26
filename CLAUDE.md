@@ -34,14 +34,19 @@ Before running bootstrap, verify:
 1. **OpenClaw is running:** `systemctl --user status openclaw-gateway.service`
 2. **Fabric credentials exist:** `cat ~/.openclaw/workspace/.env.fabric` should contain `FABRIC_API_KEY` and `FABRIC_USER_ID`
 
-If Fabric credentials aren't set up yet, create the file:
+If credentials aren't set up yet, create the file:
 ```bash
-cat > ~/.openclaw/workspace/.env.fabric <<EOF
-FABRIC_API_KEY=<your_key>
-FABRIC_USER_ID=<your_user_id>
-EOF
-chmod 600 ~/.openclaw/workspace/.env.fabric
+nano ~/.openclaw/workspace/.env.fabric
 ```
+
+Add these lines:
+```
+FABRIC_API_KEY=<your_fabric_api_key>
+FABRIC_USER_ID=<your_fabric_user_id>
+OPENAI_API_KEY=<your_openai_api_key>
+```
+
+Then: `chmod 600 ~/.openclaw/workspace/.env.fabric`
 
 **How to get Fabric credentials:** Create an account at [developer.onfabric.io](https://developer.onfabric.io), follow the Quick Start to connect data sources (Google, Instagram), then find the API Key and User ID on the dashboard.
 
@@ -122,13 +127,12 @@ If Fabric credentials are configured, run the profile builder to create a compre
 
 ```bash
 cd ~/.openclaw/workspace
+source .env.fabric
 python3 skills/fabric-profile-builder/scripts/run_pipeline.py \
   --output-dir /tmp/fabric-profile \
-  --extraction-provider anthropic --extraction-model claude-haiku-4-5-20251001 \
-  --synthesis-provider anthropic --synthesis-model claude-sonnet-4-5-20250514
+  --extraction-provider openai --extraction-model gpt-4o-mini \
+  --synthesis-provider openai --synthesis-model gpt-4o
 ```
-
-If the machine uses OpenAI instead of Anthropic, adjust the provider and model flags accordingly.
 
 This generates interest profiles across 10 categories and a comprehensive `USER.md`. Copy the generated `USER.md` to the workspace if it looks good.
 
