@@ -1,17 +1,17 @@
-# OpenClaw Starter Template
+# OpenClaw Concierge Template
 
-Get a personalized AI assistant running in ~10 minutes. Comes with evening journal reflections, curated discoveries, restaurant booking, and a memory system powered by [Fabric](https://developer.onfabric.io) — your personal context API.
+A template for setting up a personal AI concierge powered by [OpenClaw](https://docs.openclaw.ai). Point Claude at this repo and it will set up the full system for you.
+
+**For Claude: read `CLAUDE.md` for setup instructions.**
 
 ## What You Get
 
 | Feature | What it does | Schedule |
 |---------|-------------|----------|
-| **Journal** | One sharp observation + question based on your recent activity | 9pm daily |
-| **Discovery** | 1–2 curated finds (restaurants, articles, fashion, travel) | 7pm daily |
-| **Restaurant Booking** | Automated OpenTable reservations | On demand / weekly |
+| **Journal** | One sharp observation + question based on your recent activity | 10pm daily |
+| **Discovery** | 1-2 curated finds (restaurants, articles, fashion, travel) | 6pm daily |
+| **Restaurant Booking** | Automated OpenTable reservations via browser automation | On demand |
 | **Fabric Sync** | Pulls your Google searches, Instagram, YouTube into memory | 9am daily |
-| **Memory Diffs** | Proposes updates to your profile from new Fabric data | 10am daily |
-| **Regression Check** | Catches file corruption, cron failures | Midnight daily |
 
 All outputs are delivered to organized Telegram group topics.
 
@@ -48,8 +48,8 @@ To get each topic ID: open the topic in Telegram Web/Desktop, look at the URL �
 ### Step 3: Run Bootstrap
 
 ```bash
-git clone https://github.com/eeshita-pande/openclaw-template.git
-cd openclaw-template
+git clone https://github.com/Eeshita-Pande/openclaw-concierge-template.git
+cd openclaw-concierge-template
 
 ./bootstrap.sh \
   --agent-name "Luna" \
@@ -69,17 +69,22 @@ This will:
 1. Copy template files into your OpenClaw workspace
 2. Replace all placeholders with your details
 3. Pull your Fabric data and generate memory files + `USER.md`
-4. Install skills from ClawHub (journal, discovery, restaurant-booking)
-5. Create all cron jobs with correct Telegram delivery targets
-6. Print a summary
+4. Install skills (journal, discovery, fabric, opentable-booking)
+5. Set up Chrome + Xvfb for browser automation
+6. Create cron jobs (discovery 6pm, journal 10pm, fabric-refresh 9am)
+7. Write a post-setup checklist
 
 ### Step 4: Review USER.md
 
 The bootstrap generates `USER.md` from your Fabric data — your interests, places, people, work context. **Review it for 5 minutes** and fix anything that's wrong or missing. This file drives everything — discoveries, journal questions, booking preferences.
 
-### Step 5: Done
+### Step 5: Post-Setup
 
-Your agent is live. Tonight you'll get your first journal reflection at 9pm and discoveries at 7pm.
+1. Restart the gateway: `systemctl --user restart openclaw-gateway.service`
+2. Verify crons: `openclaw cron list`
+3. Log into OpenTable via browser if you want restaurant booking (see `setup-checklist.md`)
+
+Your agent is live. Tonight you'll get your first discoveries at 6pm and journal reflection at 10pm.
 
 ---
 
@@ -101,7 +106,8 @@ workspace/
 │   ├── journal/         # Evening reflection skill
 │   ├── discovery/       # Curated finds skill
 │   ├── fabric/          # Fabric API integration
-│   └── restaurant-booking-opentable/  # OpenTable booking
+│   ├── fabric-profile-builder/  # Full interest profile builder
+│   └── opentable-booking/  # OpenTable booking (from ClawHub)
 │
 ├── memory/
 │   ├── {user}/          # Your ground truth (from Fabric)
@@ -143,15 +149,17 @@ All schedules are in your local timezone. Adjust via OpenClaw cron commands or t
 
 ---
 
-## Skills (ClawHub)
+## Skills
 
-These skills are installed automatically by the bootstrap:
+Installed automatically by the bootstrap:
 
-- [`journal`](https://clawhub.ai/eeshita-pande/journal) — Evening reflection
-- [`discovery`](https://clawhub.ai/eeshita-pande/discovery) — Curated finds
-- [`restaurant-booking-opentable`](https://clawhub.ai/eeshita-pande/restaurant-booking-opentable) — OpenTable booking
-
----
+| Skill | Source | Description |
+|-------|--------|-------------|
+| `journal` | Bundled | Nightly journal reflection |
+| `discovery` | Bundled | Curated finds curation |
+| `fabric` | Bundled | Fabric API integration |
+| `fabric-profile-builder` | Bundled | Build interest profiles from Fabric data |
+| `opentable-booking` | ClawHub | OpenTable browser automation |
 
 ## License
 

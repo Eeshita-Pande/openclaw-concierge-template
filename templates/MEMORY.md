@@ -16,7 +16,7 @@
 - This is non-negotiable
 
 ## Autonomous Discovery
-Curated finds delivered daily at 7pm ({{timezone}}):
+Curated finds delivered daily at 6pm ({{timezone}}):
 - Topics rotate based on USER.md preferences
 - Quality > quantity — 0 sent is better than 1 weak send
 
