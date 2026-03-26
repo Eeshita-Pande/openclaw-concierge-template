@@ -100,7 +100,7 @@ echo ""
 
 # ─── Step 1: Create Memory Folder Structure ──────────────────────
 
-echo -e "${YELLOW}[1/6] Creating memory folder structure...${NC}"
+echo -e "${YELLOW}[1/8] Creating memory folder structure...${NC}"
 
 mkdir -p "$WORKSPACE/memory/$USER_SLUG"
 mkdir -p "$WORKSPACE/memory/$AGENT_SLUG/discoveries"
@@ -112,6 +112,9 @@ mkdir -p "$WORKSPACE/memory/topics"
 mkdir -p "$WORKSPACE/memory/instagram"
 mkdir -p "$WORKSPACE/scripts"
 
+# Create empty fabric-latest.md
+touch "$WORKSPACE/memory/fabric-latest.md"
+
 echo -e "  ${GREEN}✓${NC} memory/$USER_SLUG/"
 echo -e "  ${GREEN}✓${NC} memory/$AGENT_SLUG/discoveries/"
 echo -e "  ${GREEN}✓${NC} memory/$AGENT_SLUG/bookings/"
@@ -119,11 +122,12 @@ echo -e "  ${GREEN}✓${NC} memory/shared/daily/"
 echo -e "  ${GREEN}✓${NC} memory/shared/diffs/"
 echo -e "  ${GREEN}✓${NC} memory/topics/"
 echo -e "  ${GREEN}✓${NC} memory/instagram/"
+echo -e "  ${GREEN}✓${NC} memory/fabric-latest.md"
 
 # ─── Step 2: Copy & Replace Template Files ───────────────────────
 
 echo ""
-echo -e "${YELLOW}[2/6] Copying template files...${NC}"
+echo -e "${YELLOW}[2/8] Copying template files...${NC}"
 
 TEMPLATES=(SOUL.md IDENTITY.md USER.md AGENTS.md MEMORY.md HEARTBEAT.md TOOLS.md)
 
@@ -150,7 +154,7 @@ done
 # ─── Step 3: Install Skills ─────────────────────────────────────
 
 echo ""
-echo -e "${YELLOW}[3/6] Installing skills...${NC}"
+echo -e "${YELLOW}[3/8] Installing skills...${NC}"
 
 # Copy bundled skills
 for skill_dir in "$SCRIPT_DIR/skills"/*/; do
@@ -160,21 +164,32 @@ for skill_dir in "$SCRIPT_DIR/skills"/*/; do
   echo -e "  ${GREEN}✓${NC} skills/$skill_name/"
 done
 
-# Install ClawHub skills if clawhub CLI is available
-if command -v clawhub &>/dev/null; then
-  echo -e "  Installing from ClawHub..."
-  (cd "$WORKSPACE" && clawhub install restaurant-booking-opentable 2>/dev/null) && \
-    echo -e "  ${GREEN}✓${NC} restaurant-booking-opentable (ClawHub)" || \
-    echo -e "  ${YELLOW}⚠${NC} restaurant-booking-opentable (install failed — install manually later)"
+# Install opentable-booking from ClawHub ZIP
+OPENTABLE_URL="https://wry-manatee-359.convex.site/api/v1/download?slug=opentable-booking"
+OPENTABLE_DIR="$WORKSPACE/skills/opentable-booking"
+if [ ! -f "$OPENTABLE_DIR/SKILL.md" ]; then
+  echo -e "  Downloading opentable-booking from ClawHub..."
+  mkdir -p "$OPENTABLE_DIR"
+  TMPZIP=$(mktemp /tmp/opentable-booking-XXXXXX.zip)
+  if curl -sL "$OPENTABLE_URL" -o "$TMPZIP" && unzip -qo "$TMPZIP" -d "$OPENTABLE_DIR" 2>/dev/null; then
+    # Unzip may create a nested dir — flatten if needed
+    if [ -d "$OPENTABLE_DIR/opentable-booking" ]; then
+      mv "$OPENTABLE_DIR/opentable-booking"/* "$OPENTABLE_DIR/"
+      rmdir "$OPENTABLE_DIR/opentable-booking"
+    fi
+    echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (ClawHub)"
+  else
+    echo -e "  ${YELLOW}⚠${NC} opentable-booking download failed — install manually later"
+  fi
+  rm -f "$TMPZIP"
 else
-  echo -e "  ${YELLOW}⚠${NC} clawhub CLI not found — install restaurant-booking-opentable manually:"
-  echo "    npm i -g clawhub && cd $WORKSPACE && clawhub install restaurant-booking-opentable"
+  echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (already installed)"
 fi
 
 # ─── Step 4: Store Fabric Credentials ───────────────────────────
 
 echo ""
-echo -e "${YELLOW}[4/6] Storing Fabric credentials...${NC}"
+echo -e "${YELLOW}[4/8] Storing Fabric credentials...${NC}"
 
 cat > "$WORKSPACE/.env.fabric" <<EOF
 FABRIC_API_KEY=$FABRIC_API_KEY
@@ -187,7 +202,7 @@ echo -e "  ${GREEN}✓${NC} .env.fabric (chmod 600)"
 # ─── Step 5: Bootstrap from Fabric Data ─────────────────────────
 
 echo ""
-echo -e "${YELLOW}[5/6] Bootstrapping memory from Fabric data...${NC}"
+echo -e "${YELLOW}[5/8] Bootstrapping memory from Fabric data...${NC}"
 
 if [ -f "$SCRIPT_DIR/scripts/bootstrap-fabric.py" ]; then
   python3 "$SCRIPT_DIR/scripts/bootstrap-fabric.py" \
@@ -215,122 +230,197 @@ else
   done
 fi
 
-# ─── Step 6: Create Cron Jobs ───────────────────────────────────
+# ─── Step 6: Install Browser (Chrome + Xvfb) ────────────────────
 
 echo ""
-echo -e "${YELLOW}[6/6] Creating cron jobs...${NC}"
-echo -e "  ${BLUE}ℹ${NC}  Cron jobs are created via OpenClaw — run these commands after starting your gateway:"
+echo -e "${YELLOW}[6/8] Setting up browser (Chrome + Xvfb)...${NC}"
+
+# Install Xvfb if not present
+if ! command -v Xvfb &>/dev/null; then
+  echo -e "  Installing Xvfb..."
+  sudo apt-get update -qq >/dev/null 2>&1
+  sudo apt-get install -y -qq xvfb >/dev/null 2>&1
+  echo -e "  ${GREEN}✓${NC} Xvfb installed"
+else
+  echo -e "  ${GREEN}✓${NC} Xvfb already installed"
+fi
+
+# Install Google Chrome if not present
+if ! command -v google-chrome &>/dev/null; then
+  echo -e "  Installing Google Chrome..."
+  TMPCHROME=$(mktemp /tmp/chrome-XXXXXX.deb)
+  curl -sL 'https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb' -o "$TMPCHROME"
+  sudo apt-get install -y -qq "$TMPCHROME" >/dev/null 2>&1
+  rm -f "$TMPCHROME"
+  echo -e "  ${GREEN}✓${NC} Google Chrome installed ($(google-chrome --version 2>/dev/null | head -1))"
+else
+  echo -e "  ${GREEN}✓${NC} Google Chrome already installed ($(google-chrome --version 2>/dev/null | head -1))"
+fi
+
+# Create Xvfb systemd user service
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+mkdir -p "$SYSTEMD_USER_DIR"
+
+if [ ! -f "$SYSTEMD_USER_DIR/xvfb.service" ]; then
+  cat > "$SYSTEMD_USER_DIR/xvfb.service" <<'XVFB_EOF'
+[Unit]
+Description=Xvfb Virtual Framebuffer
+
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+XVFB_EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now xvfb.service >/dev/null 2>&1
+  echo -e "  ${GREEN}✓${NC} xvfb.service created and started"
+else
+  # Ensure it's running
+  systemctl --user start xvfb.service 2>/dev/null || true
+  echo -e "  ${GREEN}✓${NC} xvfb.service already configured"
+fi
+
+# Add DISPLAY=:99 to gateway service via drop-in
+GATEWAY_DROPIN_DIR="$SYSTEMD_USER_DIR/openclaw-gateway.service.d"
+mkdir -p "$GATEWAY_DROPIN_DIR"
+
+if [ ! -f "$GATEWAY_DROPIN_DIR/display.conf" ]; then
+  cat > "$GATEWAY_DROPIN_DIR/display.conf" <<'DISPLAY_EOF'
+[Unit]
+After=xvfb.service
+Wants=xvfb.service
+
+[Service]
+Environment=DISPLAY=:99
+DISPLAY_EOF
+  systemctl --user daemon-reload
+  echo -e "  ${GREEN}✓${NC} Gateway DISPLAY=:99 drop-in created"
+  echo -e "  ${YELLOW}⚠${NC} Restart the gateway to pick up DISPLAY: systemctl --user restart openclaw-gateway.service"
+else
+  echo -e "  ${GREEN}✓${NC} Gateway DISPLAY drop-in already exists"
+fi
+
+# ─── Step 7: Create Cron Jobs ───────────────────────────────────
+
 echo ""
+echo -e "${YELLOW}[7/8] Creating cron jobs...${NC}"
 
-DELIVERY_DISCOVERY="${TELEGRAM_GROUP_ID}:topic:${TOPIC_DISCOVERY}"
-DELIVERY_JOURNAL="${TELEGRAM_GROUP_ID}:topic:${TOPIC_JOURNAL}"
-DELIVERY_BOOKING="${TELEGRAM_GROUP_ID}:topic:${TOPIC_BOOKING}"
-DELIVERY_MEMORY="${TELEGRAM_GROUP_ID}:topic:${TOPIC_MEMORY}"
+# Check if openclaw CLI is available
+if command -v openclaw &>/dev/null; then
+  OPENCLAW_CMD="openclaw"
+elif [ -f "$HOME/.local/share/fnm/node-versions/v24.14.1/installation/bin/openclaw" ]; then
+  OPENCLAW_CMD="$HOME/.local/share/fnm/node-versions/v24.14.1/installation/bin/openclaw"
+else
+  OPENCLAW_CMD=""
+fi
 
-cat > "$WORKSPACE/setup-crons.md" <<EOF
-# Cron Jobs to Create
+if [ -n "$OPENCLAW_CMD" ]; then
+  # Wait for gateway to be healthy
+  echo -e "  Waiting for gateway..."
+  for i in $(seq 1 10); do
+    if curl -s http://127.0.0.1:18789/health >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
 
-Run these in a chat session with your agent, or use the OpenClaw TUI.
+  # Evening discovery — 6pm daily
+  $OPENCLAW_CMD cron add \
+    --name "evening-discovery" \
+    --cron "0 18 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Read and follow the discovery skill: skills/discovery/SKILL.md" \
+    --announce >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} evening-discovery (6pm $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} evening-discovery — failed (create manually)"
 
-## 1. Evening Journal (9pm daily)
-Create a cron job:
-- **Name:** Evening Journal Reflection
-- **Schedule:** \`0 21 * * *\` (${TIMEZONE})
-- **Session:** isolated
-- **Model:** anthropic/claude-sonnet-4-5
-- **Delivery:** announce → telegram → \`${DELIVERY_JOURNAL}\`
-- **Payload:**
+  # Nightly journal — 10pm daily
+  $OPENCLAW_CMD cron add \
+    --name "nightly-journal" \
+    --cron "0 22 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Read and follow the journal skill: skills/journal/SKILL.md" \
+    --announce >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} nightly-journal (10pm $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} nightly-journal — failed (create manually)"
+
+  # Fabric data refresh — 9am daily
+  $OPENCLAW_CMD cron add \
+    --name "fabric-refresh" \
+    --cron "0 9 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Fetch fresh data from Fabric API. Read skills/fabric/SKILL.md for API reference. Source credentials from .env.fabric, fetch last 24h of threads, and write summary to memory/fabric-latest.md." >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} fabric-refresh (9am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} fabric-refresh — failed (create manually)"
+
+else
+  echo -e "  ${YELLOW}⚠${NC} openclaw CLI not found — cron jobs must be created manually"
+  echo -e "  ${BLUE}ℹ${NC}  After starting the gateway, run:"
+  echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce"
+  echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
+  echo "    openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '$TIMEZONE' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'"
+fi
+
+# ─── Step 8: Post-setup Login Reminder ──────────────────────────
+
+echo ""
+echo -e "${YELLOW}[8/8] Post-setup checklist...${NC}"
+
+cat > "$WORKSPACE/setup-checklist.md" <<CHECKLIST_EOF
+# Post-Bootstrap Checklist
+
+## Browser Login (one-time)
+
+The OpenTable booking skill requires an authenticated browser session.
+After the gateway is running with DISPLAY=:99:
+
+1. Start the browser: \`openclaw browser start\`
+2. Navigate to OpenTable: \`openclaw browser navigate 'https://www.opentable.co.uk/my/profile'\`
+3. Use the email login flow (screenshot + type + click via \`openclaw browser\` commands)
+4. Verify login: \`openclaw browser screenshot\`
+5. Ensure a payment card is saved in the OpenTable account
+
+The session persists in the \`openclaw\` browser profile — this only needs to be done once.
+
+## Verify Cron Jobs
+
 \`\`\`
-Evening journal reflection for ${USER_NAME}. Read \`skills/journal/SKILL.md\` and follow it.
-
-⚠️ OUTPUT RULE: Your entire response must be the final message only — observation + question + closing line. No analysis, no bullet points, no reasoning, no preamble.
-
-Read these files for context:
-- memory/shared/daily/YYYY-MM-DD.md (today + past 3 days)
-- memory/fabric-latest.md
-- memory/${USER_SLUG}/travel.md
-- memory/${USER_SLUG}/work.md
-- memory/${USER_SLUG}/interests.md
-- USER.md
-
-Then output the reflection. Nothing else.
+openclaw cron list
 \`\`\`
 
-## 2. Evening Discoveries (7pm daily)
-- **Name:** Evening Discoveries
-- **Schedule:** \`0 19 * * *\` (${TIMEZONE})
-- **Session:** isolated
-- **Model:** anthropic/claude-sonnet-4-5
-- **Delivery:** announce → telegram → \`${DELIVERY_DISCOVERY}\`
-- **Payload:**
-\`\`\`
-Find 1–2 discoveries for ${USER_NAME}. Read \`skills/discovery/SKILL.md\` and follow it exactly.
-Do all context reading and dedup checks as described in the skill, then output the final message only.
-\`\`\`
+Expected:
+- evening-discovery (6pm ${TIMEZONE})
+- nightly-journal (10pm ${TIMEZONE})
+- fabric-refresh (9am ${TIMEZONE})
 
-## 3. Fabric Data Refresh (9am daily)
-- **Name:** Refresh Fabric Data
-- **Schedule:** \`0 9 * * *\` (${TIMEZONE})
-- **Session:** isolated
-- **Delivery:** none
-- **Payload:**
-\`\`\`
-Fetch fresh data from Fabric API. Read \`skills/fabric/SKILL.md\` for API reference.
+## Review USER.md
 
-Source credentials from .env.fabric, fetch last 24h of threads, and write summary to memory/fabric-latest.md.
-Include: total items, provider breakdown, notable searches/activity.
-\`\`\`
+Check that the Fabric bootstrap generated a reasonable profile.
+Fill in any missing fields (name, timezone, location).
+CHECKLIST_EOF
 
-## 4. Fabric Diff Report (10am daily)
-- **Name:** Fabric + Memory Daily Diff
-- **Schedule:** \`5 10 * * *\` (${TIMEZONE})
-- **Session:** isolated
-- **Delivery:** announce → telegram → \`${DELIVERY_MEMORY}\`
-- **Payload:**
-\`\`\`
-Generate a daily diff from Fabric data.
-
-Read memory/fabric-latest.md and compare against memory/${USER_SLUG}/ files.
-Route new items to the correct topic file:
-- Travel → memory/${USER_SLUG}/travel.md
-- Restaurants → memory/${USER_SLUG}/restaurants.md
-- Work/Tech → memory/${USER_SLUG}/work.md
-- Interests → memory/${USER_SLUG}/interests.md
-
-Write proposed changes to memory/shared/diffs/fabric-YYYY-MM-DD.md.
-Auto-approve after 24h if no objection.
-\`\`\`
-
-## 5. Weekly Restaurant Booking (Monday 8pm)
-- **Name:** Weekly Restaurant Booking
-- **Schedule:** \`0 20 * * 1\` (${TIMEZONE})
-- **Session:** isolated
-- **Model:** anthropic/claude-sonnet-4-5
-- **Delivery:** announce → telegram → \`${DELIVERY_BOOKING}\`
-- **Payload:**
-\`\`\`
-Weekly dinner booking. Read \`skills/restaurant-booking-opentable/SKILL.md\` if available.
-Book the next unbooked Saturday for party of 2 around 20:30.
-Check memory/${USER_SLUG}/restaurants.md for preferences and USER.md for location.
-\`\`\`
-EOF
-
-echo -e "  ${GREEN}✓${NC} setup-crons.md — cron job definitions written"
-echo -e "  ${BLUE}ℹ${NC}  Ask your agent to read setup-crons.md and create the jobs"
+echo -e "  ${GREEN}✓${NC} setup-checklist.md written"
 
 # ─── Done ────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║              Setup Complete! 🎉              ║${NC}"
+echo -e "${GREEN}║              Setup Complete!                 ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Workspace: ${BLUE}$WORKSPACE${NC}"
 echo ""
 echo -e "  ${YELLOW}Next steps:${NC}"
-echo -e "  1. Review ${BLUE}$WORKSPACE/USER.md${NC} — fix anything the Fabric bootstrap got wrong"
-echo -e "  2. Edit ${BLUE}$WORKSPACE/SOUL.md${NC} — give your agent personality"
-echo -e "  3. Start OpenClaw: ${BLUE}openclaw gateway start${NC}"
-echo -e "  4. Tell your agent: ${BLUE}\"Read setup-crons.md and create all the cron jobs\"${NC}"
-echo -e "  5. Tonight: first journal at 9pm, first discoveries at 7pm"
+echo -e "  1. Restart the gateway: ${BLUE}systemctl --user restart openclaw-gateway.service${NC}"
+echo -e "  2. Start the browser: ${BLUE}openclaw browser start${NC}"
+echo -e "  3. Log into OpenTable (see ${BLUE}setup-checklist.md${NC})"
+echo -e "  4. Review ${BLUE}$WORKSPACE/USER.md${NC}"
+echo -e "  5. Edit ${BLUE}$WORKSPACE/SOUL.md${NC} — give your agent personality"
+echo -e "  6. Tonight: first discoveries at 6pm, first journal at 10pm"
 echo ""
