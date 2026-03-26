@@ -27,34 +27,23 @@ Before running bootstrap, ensure:
 
 ## Setup Flow
 
-### Step 1: Gather Information from the User
+### Step 1: Verify Prerequisites
 
-Ask the user for the following. Do not proceed until you have all required items.
+Before running bootstrap, verify:
 
-**Required:**
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| Agent name | The name the agent goes by | "Luna" |
-| User name | The user's first name | "Sarah" |
-| Timezone | IANA timezone | "Europe/London" |
-| Fabric API key | From developer.onfabric.io | "fab_..." |
-| Fabric User ID | From the Fabric dashboard | "usr_..." |
+1. **OpenClaw is running:** `systemctl --user status openclaw-gateway.service`
+2. **Fabric credentials exist:** `cat ~/.openclaw/workspace/.env.fabric` should contain `FABRIC_API_KEY` and `FABRIC_USER_ID`
 
-**Optional:**
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| Location | User's city | Derived from timezone |
-| Fabric Account ID | Only needed for some API calls | "" |
-| Workspace path | OpenClaw workspace location | `~/.openclaw/workspace` |
-| Telegram group ID | The group where the agent posts | "" (no Telegram) |
-| Topic: Discovery | Telegram topic ID for curated finds | "" |
-| Topic: Journal | Telegram topic ID for journal reflections | "" |
-| Topic: Booking | Telegram topic ID for booking confirmations | "" |
-| Topic: Memory | Telegram topic ID for memory/diff updates | "" |
+If Fabric credentials aren't set up yet, create the file:
+```bash
+cat > ~/.openclaw/workspace/.env.fabric <<EOF
+FABRIC_API_KEY=<your_key>
+FABRIC_USER_ID=<your_user_id>
+EOF
+chmod 600 ~/.openclaw/workspace/.env.fabric
+```
 
-**How to get Telegram topic IDs (if using Telegram):** Open the topic in Telegram Web/Desktop. The URL ends with `/{topic_id}`. The group must have Topics/Forum mode enabled (Group Settings > Topics > On). The user needs to create these topics manually: Discovery, Journal, Booking, Memory.
-
-**How to get Fabric credentials:** The user creates an account at [developer.onfabric.io](https://developer.onfabric.io), follows the Quick Start to connect data sources (Google, Instagram), then finds their API Key, Account ID, and User ID on the dashboard.
+**How to get Fabric credentials:** Create an account at [developer.onfabric.io](https://developer.onfabric.io), follow the Quick Start to connect data sources (Google, Instagram), then find the API Key and User ID on the dashboard.
 
 ### Step 2: Clone This Repo to the Target Machine
 
@@ -69,26 +58,21 @@ cd openclaw-concierge-template
 ### Step 3: Run the Bootstrap Script
 
 ```bash
-./bootstrap.sh \
-  --agent-name "<AGENT_NAME>" \
-  --user-name "<USER_NAME>" \
-  --timezone "<TIMEZONE>" \
-  --fabric-api-key "<FABRIC_API_KEY>" \
-  --fabric-user-id "<FABRIC_USER_ID>"
+./bootstrap.sh
 ```
 
-Add `--fabric-account-id`, `--location`, or `--workspace` if the user provided them.
+The script auto-detects timezone from the machine. Override with `--timezone "America/New_York"` if needed.
+Add `--location "New York"` to set the user's city (otherwise derived from timezone).
 Add `--telegram-group-id`, `--topic-discovery`, `--topic-journal`, `--topic-booking`, `--topic-memory` if using Telegram delivery.
 
 The bootstrap script will:
 1. Create the memory folder structure in the workspace
-2. Copy and template-replace workspace files (SOUL.md, IDENTITY.md, USER.md, etc.)
-3. Install skills (journal, discovery, fabric, fabric-profile-builder, opentable-booking)
-4. Store Fabric credentials securely
-5. Bootstrap memory from Fabric API data (interests, restaurants, travel, etc.)
-6. Install Chrome + Xvfb for browser automation
-7. Create cron jobs (fabric-refresh 9am, memory-review 10am, fabric-daily-diff 10:05am, memory-ingest every 30min, discovery 6pm, journal 10pm, weekly-booking-check Sunday noon)
-8. Write a post-setup checklist
+2. Copy template files (SOUL.md, IDENTITY.md, USER.md, AGENTS.md, etc.)
+3. Install all skills (journal, discovery, fabric, fabric-memory-diff, memory-review, opentable-booking, etc.)
+4. Bootstrap memory from Fabric API data (if credentials available)
+5. Install Chrome + Xvfb for browser automation
+6. Create 7 cron jobs (fabric-refresh, memory-review, fabric-daily-diff, memory-ingest, discovery, journal, weekly-booking-check)
+7. Write a post-setup checklist
 
 ### Step 4: Restart the Gateway
 

@@ -21,9 +21,8 @@ Outputs can optionally be delivered to organized Telegram group topics.
 ## Prerequisites
 
 1. **OpenClaw** installed and running ([docs.openclaw.ai](https://docs.openclaw.ai))
-2. **Fabric account** with API credentials ([developer.onfabric.io](https://developer.onfabric.io))
+2. **Fabric credentials** in `~/.openclaw/workspace/.env.fabric` ([developer.onfabric.io](https://developer.onfabric.io))
 3. **Telegram bot** connected to OpenClaw (optional — for message delivery)
-4. **Telegram group** with forum/topics enabled (optional — your agent's home base)
 
 ---
 
@@ -31,61 +30,49 @@ Outputs can optionally be delivered to organized Telegram group topics.
 
 ### Step 1: Fabric Credentials
 
-1. Create an account at [developer.onfabric.io](https://developer.onfabric.io)
-2. Follow the [Quick Start guide](https://developer.onfabric.io/quick-start) to connect your data sources (Google, Instagram)
-3. Note your **API Key**, **Account ID**, and **User ID** from the dashboard
+Create an account at [developer.onfabric.io](https://developer.onfabric.io), connect data sources (Google, Instagram), then save your credentials on the machine:
 
-### Step 2: Telegram Group Topics (Optional)
+```bash
+cat > ~/.openclaw/workspace/.env.fabric <<EOF
+FABRIC_API_KEY=your_api_key
+FABRIC_USER_ID=your_user_id
+EOF
+chmod 600 ~/.openclaw/workspace/.env.fabric
+```
 
-If using Telegram delivery, create a group with **Topics enabled** (Group Settings → Topics → On).
-
-Create these 5 topics manually:
-- **General** (default topic — no ID needed)
-- **Discovery** — curated finds land here
-- **Journal** — evening reflections
-- **Booking** — restaurant booking confirmations
-- **Memory** — Fabric diffs and memory updates
-
-To get each topic ID: open the topic in Telegram Web/Desktop, look at the URL — it ends with `/{topic_id}`.
-
-### Step 3: Run Bootstrap
+### Step 2: Run Bootstrap
 
 ```bash
 git clone <REPO_URL>
 cd openclaw-concierge-template
-
-./bootstrap.sh \
-  --agent-name "Luna" \
-  --user-name "Sarah" \
-  --timezone "America/New_York" \
-  --fabric-api-key "fab_xxx" \
-  --fabric-account-id "acc_xxx" \
-  --fabric-user-id "usr_xxx"
+./bootstrap.sh
 ```
 
-Add Telegram flags if using Telegram delivery:
-```bash
-  --telegram-group-id "-100xxxxxxxxxx" \
-  --topic-discovery "3" \
-  --topic-journal "5" \
-  --topic-booking "7" \
-  --topic-memory "9"
-```
+Timezone is auto-detected. Override with `--timezone "America/New_York"` if needed.
+Add `--telegram-group-id`, `--topic-*` flags if using Telegram delivery.
 
 This will:
 1. Copy template files into your OpenClaw workspace
-2. Replace all placeholders with your details
-3. Pull your Fabric data and generate memory files + `USER.md`
-4. Install skills (journal, discovery, fabric, opentable-booking)
-5. Set up Chrome + Xvfb for browser automation
-6. Create cron jobs (7 total: fabric-refresh, memory-review, fabric-daily-diff, memory-ingest, discovery, journal, weekly-booking-check)
-7. Write a post-setup checklist
+2. Install all skills (journal, discovery, fabric, memory-review, fabric-memory-diff, opentable-booking, etc.)
+3. Pull your Fabric data and generate memory stubs
+4. Set up Chrome + Xvfb for browser automation
+5. Create 7 cron jobs (fabric-refresh, memory-review, fabric-daily-diff, memory-ingest, discovery, journal, weekly-booking-check)
+6. Write a post-setup checklist
 
-### Step 4: Review USER.md
+### Step 3: Review USER.md
 
-The bootstrap generates `USER.md` from your Fabric data — your interests, places, people, work context. **Review it for 5 minutes** and fix anything that's wrong or missing. This file drives everything — discoveries, journal questions, booking preferences.
+Run the profile builder to generate a comprehensive user profile, then review it:
+```bash
+cd ~/.openclaw/workspace
+python3 skills/fabric-profile-builder/scripts/run_pipeline.py \
+  --output-dir /tmp/fabric-profile \
+  --extraction-provider anthropic --extraction-model claude-haiku-4-5-20251001 \
+  --synthesis-provider anthropic --synthesis-model claude-sonnet-4-5-20250514
+```
 
-### Step 5: Post-Setup
+Review `USER.md` — this file drives everything (discoveries, journal questions, booking preferences).
+
+### Step 4: Post-Setup
 
 1. Restart the gateway: `systemctl --user restart openclaw-gateway.service`
 2. Verify crons: `openclaw cron list`
@@ -119,14 +106,14 @@ workspace/
 │   └── opentable-booking/   # OpenTable browser automation
 │
 ├── memory/
-│   ├── {user}/          # Your ground truth (from Fabric)
+│   ├── user/            # Your ground truth (from Fabric)
 │   │   ├── interests.md
 │   │   ├── restaurants.md
 │   │   ├── fashion.md
 │   │   ├── travel.md
 │   │   ├── relationships.md
 │   │   └── work.md
-│   ├── {agent}/         # Agent's autonomous work
+│   ├── agent/           # Agent's autonomous work
 │   │   ├── discoveries/
 │   │   └── bookings/
 │   ├── shared/

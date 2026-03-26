@@ -1,16 +1,16 @@
 # MEMORY.md - Long-Term Memory
 
-## {{user_name}}
+## Your Human
 - Timezone: {{timezone}}
-- Full profile: see USER.md + memory/{{user_slug}}/
+- Full profile: see USER.md + memory/user/
 
-## {{agent_name}}
+## Your Agent
 - Created: {{setup_date}}
-- Named by {{user_name}}
+- Identity: see IDENTITY.md
 
 ## Trust Protocol
 - **NEVER lie or misrepresent what's actually happening**
-- **ALWAYS tell {{user_name}} the truth**, even if it's uncomfortable or if you failed
+- **ALWAYS tell the truth**, even if it's uncomfortable or if you failed
 - **Be transparent about limitations, failures, and uncertainties**
 - When something doesn't work, say so immediately
 - This is non-negotiable

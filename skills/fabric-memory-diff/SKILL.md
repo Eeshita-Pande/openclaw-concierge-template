@@ -21,7 +21,7 @@ Analyze recent Fabric API data and propose targeted updates to user memory files
 ## Prerequisites
 
 - `memory/fabric-latest.md` must be populated (by the `fabric-refresh` cron)
-- User memory files exist in `memory/{user_slug}/` (even if empty stubs)
+- User memory files exist in `memory/user/` (even if empty stubs)
 - `.env.fabric` credentials configured
 
 ## Workflow
@@ -31,12 +31,12 @@ Analyze recent Fabric API data and propose targeted updates to user memory files
 Load these files (DO NOT skip any):
 1. `memory/fabric-latest.md` — raw Fabric threads from last 24h
 2. `USER.md` — user profile for context
-3. `memory/{user_slug}/restaurants.md` — existing restaurant memory
-4. `memory/{user_slug}/fashion.md` — existing fashion memory
-5. `memory/{user_slug}/travel.md` — existing travel memory
-6. `memory/{user_slug}/interests.md` — existing interests memory
-7. `memory/{user_slug}/work.md` — existing work memory
-8. `memory/{user_slug}/relationships.md` — existing relationship memory
+3. `memory/user/restaurants.md` — existing restaurant memory
+4. `memory/user/fashion.md` — existing fashion memory
+5. `memory/user/travel.md` — existing travel memory
+6. `memory/user/interests.md` — existing interests memory
+7. `memory/user/work.md` — existing work memory
+8. `memory/user/relationships.md` — existing relationship memory
 
 ### Step 2: Analyze Each Thread
 
@@ -64,12 +64,12 @@ Each proposal targets a specific memory file:
 
 | Signal Type | Target File |
 |-------------|-------------|
-| Restaurant visit/research | `memory/{user_slug}/restaurants.md` |
-| Fashion purchase/interest | `memory/{user_slug}/fashion.md` |
-| Travel planning/visit | `memory/{user_slug}/travel.md` |
-| Books, articles, research | `memory/{user_slug}/interests.md` |
-| Career, tools, competitors | `memory/{user_slug}/work.md` |
-| People, social events | `memory/{user_slug}/relationships.md` |
+| Restaurant visit/research | `memory/user/restaurants.md` |
+| Fashion purchase/interest | `memory/user/fashion.md` |
+| Travel planning/visit | `memory/user/travel.md` |
+| Books, articles, research | `memory/user/interests.md` |
+| Career, tools, competitors | `memory/user/work.md` |
+| People, social events | `memory/user/relationships.md` |
 
 ### Step 4: Dedup Check
 
@@ -147,4 +147,4 @@ Check `memory/shared/diffs/` for proposals older than 24h that haven't been veto
 
 - `memory/shared/diffs/fabric-YYYY-MM-DD.md` — the proposal
 - `memory/shared/diffs/applied/` — archive of applied diffs
-- Updates to `memory/{user_slug}/*.md` (only after approval/auto-approve)
+- Updates to `memory/user/*.md` (only after approval/auto-approve)
