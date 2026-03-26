@@ -87,7 +87,7 @@ The bootstrap script will:
 4. Store Fabric credentials securely
 5. Bootstrap memory from Fabric API data (interests, restaurants, travel, etc.)
 6. Install Chrome + Xvfb for browser automation
-7. Create cron jobs (discovery at 6pm, journal at 10pm, fabric-refresh at 9am, weekly-booking-check Sunday noon)
+7. Create cron jobs (fabric-refresh 9am, memory-review 10am, fabric-daily-diff 10:05am, memory-ingest every 30min, discovery 6pm, journal 10pm, weekly-booking-check Sunday noon)
 8. Write a post-setup checklist
 
 ### Step 4: Restart the Gateway
@@ -111,9 +111,12 @@ ls ~/.openclaw/workspace/memory/
 ```
 
 Expected crons:
+- `fabric-refresh` — 9am daily
+- `memory-review` — 10am daily
+- `fabric-daily-diff` — 10:05am daily
+- `memory-ingest` — every 30min (silent)
 - `evening-discovery` — 6pm daily
 - `nightly-journal` — 10pm daily
-- `fabric-refresh` — 9am daily
 - `weekly-booking-check` — Sunday noon weekly
 
 ### Step 6: Browser Login for OpenTable (Optional)
@@ -158,6 +161,9 @@ openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '<TIMEZONE>'
 openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce
 openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '<TIMEZONE>' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'
 openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '<TIMEZONE>' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'
+openclaw cron add --name memory-review --cron '0 10 * * *' --tz '<TIMEZONE>' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'
+openclaw cron add --name fabric-daily-diff --cron '5 10 * * *' --tz '<TIMEZONE>' --session isolated --message 'Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md.'
+openclaw cron add --name memory-ingest --every 30m --session isolated --no-deliver --message 'Run openclaw memory index to keep the semantic memory index current.'
 ```
 
 ### Fabric bootstrap failed
@@ -193,6 +199,8 @@ skills/                         # Bundled skills
   journal/SKILL.md              # Nightly journal reflection
   fabric/SKILL.md               # Fabric API integration
   fabric-profile-builder/       # Full profile builder pipeline
+  fabric-memory-diff/SKILL.md   # Intelligent Fabric diff + proposals
+  memory-review/SKILL.md        # Daily memory review + curation
   opentable-booking/SKILL.md    # OpenTable browser automation
 scripts/
   bootstrap-fabric.py           # Initial Fabric data fetch

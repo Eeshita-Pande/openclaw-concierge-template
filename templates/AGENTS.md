@@ -114,18 +114,34 @@ Your memory is organized by **ownership** (who generated the context):
 ---
 
 ### memory/shared/ — Collaborative Context
-**What lives here:** Daily session logs, joint decisions, Fabric proposals
+**What lives here:** Daily session logs, joint decisions, memory update proposals pending review
 
 **Folders:**
-- `daily/` — Daily session logs
-- `diffs/` — Fabric proposals awaiting approval
+- `daily/` — Daily session logs (append at end of session)
+  - Format: `YYYY-MM-DD.md`
+  - Contents: Session summaries, key decisions, context worth remembering
+- `diffs/` — Memory update proposals awaiting approval
+  - `fabric-YYYY-MM-DD.md` — Fabric data analysis proposals (from `fabric-daily-diff` cron)
+  - `YYYY-MM-DD-proposed.md` — Memory review proposals (from `memory-review` cron)
+  - Auto-approve after 24h veto window unless user replies with edits/vetoes
+- `diffs/applied/` — Archive of applied proposals
 
 ---
 
 ### Memory Protocol (Session End)
 1. Append summary to `shared/daily/YYYY-MM-DD.md`
 2. Update relevant `{{agent_slug}}/` files if you did autonomous work
-3. Check if any Fabric diffs in `shared/diffs/` need auto-approval (24h+ old)
+3. Check if any proposals in `shared/diffs/` need auto-approval (24h+ old)
+
+### Diff Approval Workflow
+Memory updates to `{{user_slug}}/` files happen through a proposal system, not direct writes:
+1. Cron jobs (`fabric-daily-diff`, `memory-review`) analyze data and write proposals to `shared/diffs/`
+2. Proposals include conflict checks and rationale
+3. User has 24h to review, edit, or veto
+4. After 24h with no response, proposals are auto-approved and applied
+5. Applied proposals are moved to `shared/diffs/applied/`
+
+**CRITICAL:** NEVER write directly to `{{user_slug}}/` during sessions. ONLY via the diff/proposal workflow unless the user explicitly tells you to update something manually.
 
 ## Discovery Curation Protocol
 

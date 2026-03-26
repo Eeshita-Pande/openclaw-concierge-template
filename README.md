@@ -12,6 +12,9 @@ A template for setting up a personal AI concierge powered by [OpenClaw](https://
 | **Discovery** | 1-2 curated finds (restaurants, articles, fashion, travel) | 6pm daily |
 | **Restaurant Booking** | Automated OpenTable reservations via browser automation | Weekly check (Sunday noon) + on demand |
 | **Fabric Sync** | Pulls your Google searches, Instagram, YouTube into memory | 9am daily |
+| **Memory Diff** | Analyzes Fabric data and proposes targeted memory updates | 10:05am daily |
+| **Memory Review** | Reviews session logs and curates long-term memory | 10am daily |
+| **Memory Ingest** | Keeps semantic memory index current | Every 30min |
 
 Outputs can optionally be delivered to organized Telegram group topics.
 
@@ -75,7 +78,7 @@ This will:
 3. Pull your Fabric data and generate memory files + `USER.md`
 4. Install skills (journal, discovery, fabric, opentable-booking)
 5. Set up Chrome + Xvfb for browser automation
-6. Create cron jobs (discovery 6pm, journal 10pm, fabric-refresh 9am, weekly-booking-check Sunday noon)
+6. Create cron jobs (7 total: fabric-refresh, memory-review, fabric-daily-diff, memory-ingest, discovery, journal, weekly-booking-check)
 7. Write a post-setup checklist
 
 ### Step 4: Review USER.md
@@ -111,7 +114,9 @@ workspace/
 │   ├── discovery/       # Curated finds skill
 │   ├── fabric/          # Fabric API integration
 │   ├── fabric-profile-builder/  # Full interest profile builder
-│   └── opentable-booking/  # OpenTable browser automation
+│   ├── fabric-memory-diff/  # Intelligent Fabric diff + proposals
+│   ├── memory-review/       # Daily memory review + curation
+│   └── opentable-booking/   # OpenTable browser automation
 │
 ├── memory/
 │   ├── {user}/          # Your ground truth (from Fabric)
@@ -126,7 +131,8 @@ workspace/
 │   │   └── bookings/
 │   ├── shared/
 │   │   ├── daily/       # Session logs
-│   │   └── diffs/       # Fabric update proposals
+│   │   └── diffs/       # Memory update proposals (24h veto window)
+│   │       └── applied/ # Archive of applied proposals
 │   ├── topics/          # Dedup files
 │   └── instagram/       # Monthly Instagram logs
 │
@@ -163,6 +169,8 @@ Installed automatically by the bootstrap:
 | `discovery` | Bundled | Curated finds curation |
 | `fabric` | Bundled | Fabric API integration |
 | `fabric-profile-builder` | Bundled | Build interest profiles from Fabric data |
+| `fabric-memory-diff` | Bundled | Analyze Fabric data and propose memory updates |
+| `memory-review` | Bundled | Review session logs and curate long-term memory |
 | `opentable-booking` | Bundled | OpenTable browser automation |
 
 ## License

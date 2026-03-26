@@ -351,6 +351,38 @@ if [ -n "$OPENCLAW_CMD" ]; then
     echo -e "  ${GREEN}✓${NC} weekly-booking-check (Sunday noon $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} weekly-booking-check — failed (create manually)"
 
+  # Memory review — 10am daily
+  $OPENCLAW_CMD cron add \
+    --name "memory-review" \
+    --cron "0 10 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} memory-review (10am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} memory-review — failed (create manually)"
+
+  # Fabric daily diff — 10:05am daily (after fabric-refresh at 9am)
+  $OPENCLAW_CMD cron add \
+    --name "fabric-daily-diff" \
+    --cron "5 10 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} fabric-daily-diff (10:05am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} fabric-daily-diff — failed (create manually)"
+
+  # Memory ingest — every 30min (silent, keeps semantic index current)
+  $OPENCLAW_CMD cron add \
+    --name "memory-ingest" \
+    --every "30m" \
+    --session isolated \
+    --no-deliver \
+    --message "Run openclaw memory index to keep the semantic memory index current. If no changes detected, do nothing." >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} memory-ingest (every 30min, silent)" || \
+    echo -e "  ${YELLOW}⚠${NC} memory-ingest — failed (create manually)"
+
 else
   echo -e "  ${YELLOW}⚠${NC} openclaw CLI not found — cron jobs must be created manually"
   echo -e "  ${BLUE}ℹ${NC}  After starting the gateway, run:"
@@ -358,6 +390,9 @@ else
   echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
   echo "    openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '$TIMEZONE' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'"
   echo "    openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '$TIMEZONE' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'"
+  echo "    openclaw cron add --name memory-review --cron '0 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'"
+  echo "    openclaw cron add --name fabric-daily-diff --cron '5 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md.'"
+  echo "    openclaw cron add --name memory-ingest --every 30m --session isolated --no-deliver --message 'Run openclaw memory index to keep the semantic memory index current.'"
 fi
 
 # ─── Step 8: Post-setup Login Reminder ──────────────────────────
@@ -388,9 +423,12 @@ openclaw cron list
 \`\`\`
 
 Expected:
+- fabric-refresh (9am ${TIMEZONE})
+- memory-review (10am ${TIMEZONE})
+- fabric-daily-diff (10:05am ${TIMEZONE})
+- memory-ingest (every 30min, silent)
 - evening-discovery (6pm ${TIMEZONE})
 - nightly-journal (10pm ${TIMEZONE})
-- fabric-refresh (9am ${TIMEZONE})
 - weekly-booking-check (Sunday noon ${TIMEZONE})
 
 ## Review USER.md
