@@ -20,11 +20,11 @@ Fetch personalized threads and assets from Fabric's context API. Used by daily c
    - **User ID** — the consented user's ID
    - **Account ID** — your developer account ID (optional for basic calls)
 
-4. Store credentials as OpenClaw environment variables:
+4. Store credentials in `~/.openclaw/workspace/.env.fabric`:
    ```
-   FABRIC_API_KEY=your_api_key
-   FABRIC_USER_ID=your_user_id
-   FABRIC_ACCOUNT_ID=your_account_id
+   FABRIC_API_KEY=your_fabric_api_key
+   FABRIC_USER_ID=your_fabric_user_id
+   OPENAI_API_KEY=your_openai_api_key
    ```
 
 ---
