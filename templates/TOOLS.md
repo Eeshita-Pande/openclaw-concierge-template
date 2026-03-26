@@ -1,15 +1,15 @@
 # TOOLS.md - Local Notes
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+## Skills
 
-## What Goes Here
+The following skills are available in the workspace:
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Device nicknames
-- Anything environment-specific
+- **discovery** — Curate 1-2 thoughtful discoveries. Read: `skills/discovery/SKILL.md`
+- **opentable-booking** — Book restaurants via OpenTable browser automation. Read: `skills/opentable-booking/SKILL.md`
+- **fabric** — Fetch user threads and assets from Fabric API. Read: `skills/fabric/SKILL.md`
+- **fabric-profile-builder** — Build a comprehensive interest profile from Fabric data. Read: `skills/fabric-profile-builder/SKILL.md`
+- **journal** — Nightly journal reflection. Read: `skills/journal/SKILL.md`
 
----
+## Environment Notes
 
-Add whatever helps you do your job. This is your cheat sheet.
+Add anything environment-specific here — SSH hosts, device nicknames, preferred voices, etc.

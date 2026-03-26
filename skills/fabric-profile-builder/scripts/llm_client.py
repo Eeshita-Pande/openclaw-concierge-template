@@ -142,7 +142,7 @@ class OpenAIClient(LLMClient):
                     max_tokens=max_tokens,
                     temperature=temperature,
                     messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"} if "json" not in prompt.lower()[:100] else None,
+                    response_format={"type": "json_object"} if "json" in prompt.lower()[:100] else None,
                 )
                 return response.choices[0].message.content.strip()
 
