@@ -81,7 +81,6 @@ if [ ! -f "$WORKSPACE/.env.fabric" ]; then
   echo "    FABRIC_USER_ID=<your_fabric_user_id>"
   echo "    OPENAI_API_KEY=<your_openai_api_key>"
   echo ""
-  echo -e "  Then: chmod 600 $WORKSPACE/.env.fabric"
   echo -e "  Continuing without Fabric — memory bootstrapping will be skipped."
   FABRIC_AVAILABLE=false
 else

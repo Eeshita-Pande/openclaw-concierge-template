@@ -43,7 +43,6 @@ FABRIC_USER_ID=your_fabric_user_id
 OPENAI_API_KEY=your_openai_api_key
 ```
 
-Then: `chmod 600 ~/.openclaw/workspace/.env.fabric`
 
 ### Step 2: Run Bootstrap
 

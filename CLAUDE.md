@@ -46,8 +46,6 @@ FABRIC_USER_ID=<your_fabric_user_id>
 OPENAI_API_KEY=<your_openai_api_key>
 ```
 
-Then: `chmod 600 ~/.openclaw/workspace/.env.fabric`
-
 **How to get Fabric credentials:** Create an account at [developer.onfabric.io](https://developer.onfabric.io), follow the Quick Start to connect data sources (Google, Instagram), then find the API Key and User ID on the dashboard.
 
 ### Step 2: Clone This Repo to the Target Machine
