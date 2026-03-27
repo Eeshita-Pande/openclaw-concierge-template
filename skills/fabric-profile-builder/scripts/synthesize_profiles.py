@@ -23,6 +23,9 @@ CATEGORIES = [
 ]
 
 
+DEPTH_RANK = {"identity": 0, "active": 1, "casual": 2, "passive": 3}
+
+
 def load_all_signals(intermediate_dir: str) -> dict[str, list[dict]]:
     """Load all signals from batch files and group by category."""
     by_category = {c: [] for c in CATEGORIES}
@@ -39,34 +42,101 @@ def load_all_signals(intermediate_dir: str) -> dict[str, list[dict]]:
     return by_category
 
 
-def synthesize_category(client, category: str, signals: list[dict], data_types: list[str]) -> str:
-    """Synthesize a narrative profile for one category."""
-    signal_lines = []
-    for s in signals:
-        strength = s.get("strength", "medium")
-        text = s.get("signal", "")
-        signal_lines.append(f"- [{strength}] {text}")
+def deduplicate_signals(signals: list[dict]) -> list[dict]:
+    """Deduplicate similar signals: merge evidence counts, keep strongest depth."""
+    if not signals:
+        return signals
 
-    signals_text = "\n".join(signal_lines)
+    # Normalize text for comparison
+    def normalize(text: str) -> str:
+        return text.lower().strip().rstrip(".")
+
+    merged = []
+    used = set()
+
+    for i, sig in enumerate(signals):
+        if i in used:
+            continue
+
+        # Get text field (supports both old "signal" and new "observation" schema)
+        text_i = sig.get("observation", sig.get("signal", ""))
+        norm_i = normalize(text_i)
+        evidence = sig.get("evidence_count", 1)
+        depth = sig.get("depth", sig.get("strength", "casual"))
+
+        # Find similar signals
+        for j in range(i + 1, len(signals)):
+            if j in used:
+                continue
+            text_j = signals[j].get("observation", signals[j].get("signal", ""))
+            norm_j = normalize(text_j)
+
+            # Simple overlap check: if one is a substring of the other,
+            # or if they share >60% of words
+            words_i = set(norm_i.split())
+            words_j = set(norm_j.split())
+            if len(words_i) == 0 or len(words_j) == 0:
+                continue
+
+            overlap = len(words_i & words_j) / min(len(words_i), len(words_j))
+            if overlap > 0.6 or norm_i in norm_j or norm_j in norm_i:
+                used.add(j)
+                evidence += signals[j].get("evidence_count", 1)
+                other_depth = signals[j].get("depth", signals[j].get("strength", "casual"))
+                # Keep the stronger depth
+                if DEPTH_RANK.get(other_depth, 3) < DEPTH_RANK.get(depth, 3):
+                    depth = other_depth
+                # Keep the longer/more detailed text
+                if len(text_j) > len(text_i):
+                    text_i = text_j
+
+        merged.append({
+            "observation": text_i,
+            "evidence_count": evidence,
+            "depth": depth,
+            "category": sig.get("category", ""),
+        })
+        used.add(i)
+
+    # Sort by depth rank (identity first), then by evidence count descending
+    merged.sort(key=lambda s: (DEPTH_RANK.get(s["depth"], 3), -s["evidence_count"]))
+    return merged
+
+
+def synthesize_category(client, category: str, signals: list[dict], data_types: list[str]) -> str:
+    """Synthesize a factual profile section for one category."""
+    # Deduplicate before synthesis
+    deduped = deduplicate_signals(signals)
+
+    observation_lines = []
+    for s in deduped:
+        depth = s.get("depth", "casual")
+        evidence = s.get("evidence_count", 1)
+        text = s.get("observation", s.get("signal", ""))
+        observation_lines.append(f"- [{depth}, {evidence}x] {text}")
+
+    observations_text = "\n".join(observation_lines)
     types_text = ", ".join(data_types)
 
-    prompt = f"""You are building an interest profile for a person based on their digital activity.
-The data comes from these sources: {types_text}.
+    prompt = f"""You are writing a factual profile section for a personal AI assistant.
+The goal: after reading this, the assistant should KNOW this person's specific tastes,
+the names that matter to them, and what they actually do — not vague categories.
 
-Here are all the extracted interest signals for the "{category}" category:
+Data sources: {types_text}
 
-{signals_text}
+Here are all observations for the "{category}" category, with depth level and evidence count:
 
-Write a rich, narrative interest profile in markdown. Include:
-- Key themes and patterns observed
-- Specific creators, channels, brands, or places they engage with
-- How strong each interest appears (casual vs deep engagement)
-- Cross-reference signals from different data sources when they reinforce each other
-- Any evolution over time if visible from the signals
-- Do NOT speculate beyond what the data shows
-- Do NOT make up information not present in the signals
+{observations_text}
 
-Format as a readable markdown document starting with a # heading, using ## subheadings for major themes, and bullet points for specific details."""
+Write a factual, detailed profile section in markdown. Rules:
+- Lead with the strongest signals (identity/active depth with high evidence counts)
+- Be SPECIFIC: name real people, places, brands, creators, publications when the data supports it
+- State evidence level naturally: "repeatedly searched for" vs "browsed once"
+- Omit passive/casual signals unless they form a pattern with 5+ occurrences
+- Do NOT speculate or add context not supported by the observations
+- Do NOT use filler phrases ("shows a deep interest in", "demonstrates a passion for", "multifaceted")
+- If the data is thin, say so in one line — do not pad or stretch
+- Format: # {category.title()} heading, ## subheadings for distinct themes, bullet points for specific facts"""
 
     try:
         return client.complete(prompt, max_tokens=4096, temperature=0.3)
@@ -81,63 +151,50 @@ def generate_user_md(client, profiles: dict[str, str], meta: dict) -> str:
     type_counts = meta.get("type_counts", {})
     data_types = ", ".join(type_counts.keys())
 
-    # Build data sources summary
-    sources_lines = []
-    for t, count in sorted(type_counts.items(), key=lambda x: -x[1]):
-        sources_lines.append(f"- **{t}**: {count:,} interactions")
-    sources_text = "\n".join(sources_lines)
-
     # Combine profiles
     profiles_text = ""
     for cat, content in profiles.items():
         profiles_text += f"\n\n---\n\n### {cat.title()} Profile\n\n{content}"
 
-    prompt = f"""Read all 10 interest profile sections below and synthesize them into a single cohesive USER.md.
+    prompt = f"""Read all 10 interest profile sections below and synthesize them into a single USER.md.
 
 **Data overview:**
 - Total interactions: {total:,}
 - Date range: {date_range.get('min', '?')} → {date_range.get('max', '?')}
-- Data sources:
-{sources_text}
+- Sources: {data_types}
 
 **Interest profiles:**
 {profiles_text}
 
-Generate a markdown document with this structure:
+Generate a markdown document with this exact structure:
 
-# User Profile
+# About {{Name}}
 
-*Generated from {total:,} interactions across {data_types} ({date_range.get('min', '?')} → {date_range.get('max', '?')})*
+*Built from {total:,} interactions ({date_range.get('min', '?')} → {date_range.get('max', '?')}) across {data_types}*
 
-## Data Sources
-Summary of available data.
+## Overview
+2-3 sentences: who this person is based on concrete evidence. Profession if detectable, primary domains, geographic context. No adjectives without evidence backing them.
 
-## At a Glance
-One paragraph summarizing who this person appears to be.
+## Deep Engagement
+Topics with identity-level or repeated active engagement. Each as a ### subsection with specific names, places, creators, brands. These are the person's defining interests — things they actively seek out, create content about, or return to repeatedly.
 
-## Core Interests (Deep engagement)
-### Interest 1
-### Interest 2
-...
+## Active Interests
+Topics with clear active engagement but less depth or consistency. Specific, not generic. Brief subsections.
 
-## Secondary Interests (Medium engagement)
-...
+## Background
+Topics that appear occasionally or passively. One-liners only. Do not pad this section.
 
-## Lighter Interests (Casual engagement)
-...
-
-## Personality Indicators
-Bullet points inferring personality traits from content patterns.
-
-## Data Limitations
-Honest caveats about what the data can and cannot tell us.
+## Gaps
+What the data doesn't cover. Which categories had no or minimal signal. Which data sources were absent. 2-3 bullet points max.
 
 Rules:
-- Rank interests by signal count and engagement strength
-- Cross-source signals (same interest in YouTube + Search + Instagram) rank higher
-- Write a fresh, cohesive overview — not a concatenation
-- Be specific (mention creators, brands, places by name)
-- Note which categories had minimal signal and which sources were absent"""
+- Cross-source signals (same topic appears in YouTube + Search + Instagram) should be highlighted and ranked higher
+- Be specific: name creators, brands, places, publications — not categories
+- Do NOT use filler phrases ("multifaceted", "shows a passion for", "demonstrates interest in")
+- Do NOT include "Data Sources" or "Personality Indicators" sections
+- If a profile section says data is thin, reflect that honestly — do not inflate
+- Write a fresh synthesis, not a concatenation of the category profiles
+- If the person's name is not detectable, use "User" as the heading"""
 
     try:
         return client.complete(prompt, max_tokens=8192, temperature=0.3)

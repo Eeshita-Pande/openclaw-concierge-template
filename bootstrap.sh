@@ -388,6 +388,16 @@ if [ -n "$OPENCLAW_CMD" ]; then
     echo -e "  ${GREEN}✓${NC} weekly-booking-check (Sunday noon $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} weekly-booking-check — failed (create manually)"
 
+  # Weekly profile refresh — Sunday 8am
+  $OPENCLAW_CMD cron add \
+    --name "weekly-profile-refresh" \
+    --cron "0 8 * * 0" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md." >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} weekly-profile-refresh (Sunday 8am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} weekly-profile-refresh — failed (create manually)"
+
 else
   echo -e "  ${YELLOW}⚠${NC} openclaw CLI not found — cron jobs must be created manually"
   echo -e "  ${BLUE}ℹ${NC}  After starting the gateway, run:"
@@ -398,6 +408,7 @@ else
   echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce"
   echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
   echo "    openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '$TIMEZONE' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'"
+    echo "    openclaw cron add --name weekly-profile-refresh --cron '0 8 * * 0' --tz '$TIMEZONE' --session isolated --message 'Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md.'"
 fi
 
 # ─── Step 7: Post-setup Checklist ────────────────────────────────
@@ -435,6 +446,7 @@ Expected:
 - evening-discovery (6pm ${TIMEZONE})
 - nightly-journal (10pm ${TIMEZONE})
 - weekly-booking-check (Sunday noon ${TIMEZONE})
+- weekly-profile-refresh (Sunday 8am ${TIMEZONE})
 
 ## Review USER.md
 

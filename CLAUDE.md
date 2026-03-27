@@ -105,6 +105,7 @@ Expected crons:
 - `evening-discovery` — 6pm daily
 - `nightly-journal` — 10pm daily
 - `weekly-booking-check` — Sunday noon weekly
+- `weekly-profile-refresh` — Sunday 8am weekly
 
 ### Step 6: Browser Login for OpenTable (Optional)
 
@@ -150,6 +151,7 @@ openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '<TIMEZON
 openclaw cron add --name memory-review --cron '0 10 * * *' --tz '<TIMEZONE>' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'
 openclaw cron add --name fabric-daily-diff --cron '5 10 * * *' --tz '<TIMEZONE>' --session isolated --message 'Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md.'
 openclaw cron add --name memory-ingest --every 30m --session isolated --no-deliver --message 'Run openclaw memory index to keep the semantic memory index current.'
+openclaw cron add --name weekly-profile-refresh --cron '0 8 * * 0' --tz '<TIMEZONE>' --session isolated --message 'Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md.'
 ```
 
 ### Fabric bootstrap failed
@@ -188,6 +190,8 @@ skills/                         # Bundled skills
   fabric-memory-diff/SKILL.md   # Intelligent Fabric diff + proposals
   memory-review/SKILL.md        # Daily memory review + curation
   opentable-booking/SKILL.md    # OpenTable browser automation
+  public-profile-enricher/SKILL.md  # Public profile enrichment from web
+  weekly-profile-refresh/SKILL.md   # Weekly profile refresh orchestration
 scripts/
   bootstrap-fabric.py           # Initial Fabric data fetch
   fabric-sync.sh                # Daily Fabric sync

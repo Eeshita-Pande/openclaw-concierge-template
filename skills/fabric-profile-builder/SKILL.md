@@ -81,21 +81,23 @@ For Anthropic OAuth tokens (sk-ant-oat*), you may need to set `ANTHROPIC_BETA=oa
 - Retries failed requests 3x with exponential backoff
 - No LLM needed
 
-### Phase 2: Extract Interest Signals
-- Compacts threads (type-specific: title/query/description extraction)
+### Phase 2: Extract Factual Observations
+- Compacts threads with interaction weights (Instagram stories/posts = 5x, searches = 3x, passive YouTube = 1x)
+- Tags each interaction as `[CREATED]`, `[ACTIVE]`, `[MODERATE]`, or `[PASSIVE]`
 - Batches 100 threads per LLM call
-- Extracts signals across 10 categories: relationships, work, travel, food, activities, sport, health, entertainment, shopping, values
+- Extracts factual observations (not topic lists) across 10 categories with evidence counts and depth levels
 - Checkpoints each batch to `OUTPUT_DIR/intermediate/batch_NNN.json`
 - Resumable — skips already-completed batches
 
 ### Phase 3: Synthesize Interest Profiles
-- Groups all signals by category
-- One LLM call per category for narrative synthesis
+- Deduplicates similar observations (merges evidence counts, keeps strongest depth)
+- Groups observations by category, sorted by evidence strength
+- One LLM call per category for factual synthesis (specific names, places, creators — not vague categories)
 - Writes to `OUTPUT_DIR/interests/{category}.md`
 
 ### Phase 4: Generate USER.md
 - Reads all 10 profiles
-- Produces a ranked, cross-referenced summary
+- Produces a factual, evidence-grounded summary with sections: Overview, Deep Engagement, Active Interests, Background, Gaps
 - Writes to `OUTPUT_DIR/USER.md`
 
 ## Output Structure
