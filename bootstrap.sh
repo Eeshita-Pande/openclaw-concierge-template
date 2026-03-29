@@ -307,10 +307,77 @@ if [ -n "$OPENCLAW_CMD" ]; then
     sleep 2
   done
 
-  # Build announce flag if Telegram is configured
+  # ─── Auto-detect Telegram chat ID if not provided ──────────────
+  if [ -z "$TELEGRAM_GROUP_ID" ]; then
+    OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
+
+    # Method 1: Check existing session history for a Telegram chat
+    SESSIONS_FILE="$OPENCLAW_STATE_DIR/agents/main/sessions/sessions.json"
+    if [ -f "$SESSIONS_FILE" ]; then
+      DETECTED_CHAT_ID=$(python3 -c "
+import json, sys
+with open('$SESSIONS_FILE') as f:
+    data = json.load(f)
+for key, sess in data.items():
+    origin = sess.get('origin', {})
+    if origin.get('provider') == 'telegram' and origin.get('chatType') == 'direct':
+        # Extract numeric chat ID from the session key or origin
+        from_id = origin.get('from', '').replace('telegram:', '')
+        if from_id.isdigit():
+            print(from_id)
+            sys.exit(0)
+sys.exit(1)
+" 2>/dev/null)
+
+      if [ -n "$DETECTED_CHAT_ID" ]; then
+        TELEGRAM_GROUP_ID="$DETECTED_CHAT_ID"
+        echo -e "  ${GREEN}✓${NC} Auto-detected Telegram chat ID from session history: ${GREEN}$TELEGRAM_GROUP_ID${NC}"
+      fi
+    fi
+
+    # Method 2: Try the Telegram Bot API getUpdates
+    if [ -z "$TELEGRAM_GROUP_ID" ]; then
+      OPENCLAW_CONFIG="$OPENCLAW_STATE_DIR/openclaw.json"
+      if [ -f "$OPENCLAW_CONFIG" ]; then
+        BOT_TOKEN=$(python3 -c "
+import json
+with open('$OPENCLAW_CONFIG') as f:
+    data = json.load(f)
+print(data.get('telegram', {}).get('botToken', ''))
+" 2>/dev/null)
+
+        if [ -n "$BOT_TOKEN" ]; then
+          DETECTED_CHAT_ID=$(curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=50" 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for update in data.get('result', []):
+    msg = update.get('message', {})
+    chat = msg.get('chat', {})
+    if chat.get('type') == 'private' and chat.get('id'):
+        print(chat['id'])
+        sys.exit(0)
+sys.exit(1)
+" 2>/dev/null)
+
+          if [ -n "$DETECTED_CHAT_ID" ]; then
+            TELEGRAM_GROUP_ID="$DETECTED_CHAT_ID"
+            echo -e "  ${GREEN}✓${NC} Auto-detected Telegram chat ID from Bot API: ${GREEN}$TELEGRAM_GROUP_ID${NC}"
+          fi
+        fi
+      fi
+    fi
+
+    if [ -z "$TELEGRAM_GROUP_ID" ]; then
+      echo -e "  ${YELLOW}ℹ${NC}  No Telegram chat ID found. Crons will run but won't deliver to Telegram."
+      echo -e "      To enable delivery later: message the bot on Telegram, then re-run bootstrap"
+      echo -e "      or pass --telegram-group-id <CHAT_ID>"
+    fi
+  fi
+
+  # Build announce + delivery flags if Telegram is configured
   ANNOUNCE_FLAG=""
   if [ -n "$TELEGRAM_GROUP_ID" ]; then
-    ANNOUNCE_FLAG="--announce"
+    ANNOUNCE_FLAG="--announce --to $TELEGRAM_GROUP_ID"
   fi
 
   # Fabric data refresh — 9am daily
@@ -405,8 +472,8 @@ else
   echo "    openclaw cron add --name memory-review --cron '0 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'"
   echo "    openclaw cron add --name fabric-daily-diff --cron '5 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md.'"
   echo "    openclaw cron add --name memory-ingest --every 30m --session isolated --no-deliver --message 'Run openclaw memory index to keep the semantic memory index current.'"
-  echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce"
-  echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
+  echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'"
+  echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'"
   echo "    openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '$TIMEZONE' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'"
     echo "    openclaw cron add --name weekly-profile-refresh --cron '0 8 * * 0' --tz '$TIMEZONE' --session isolated --message 'Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md.'"
 fi

@@ -144,8 +144,8 @@ Open `~/.openclaw/workspace/USER.md` and review the auto-generated profile with 
 ### Cron jobs failed to create
 If the gateway wasn't running during bootstrap, create them manually:
 ```bash
-openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce
-openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce
+openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'
+openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '<TIMEZONE>' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'
 openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '<TIMEZONE>' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'
 openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '<TIMEZONE>' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'
 openclaw cron add --name memory-review --cron '0 10 * * *' --tz '<TIMEZONE>' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'
