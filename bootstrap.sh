@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # OpenClaw Starter Template — Bootstrap Script
-# Usage: ./bootstrap.sh --agent-name "Luna" --user-name "Sarah" --timezone "America/New_York" ...
+# Usage: ./bootstrap.sh [--timezone "America/New_York"] [--location "New York"] [--workspace /path]
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,13 +12,8 @@ NC='\033[0m'
 
 # ─── Parse Arguments ──────────────────────────────────────────────
 
-AGENT_NAME=""
-USER_NAME=""
 TIMEZONE=""
 LOCATION=""
-FABRIC_API_KEY=""
-FABRIC_ACCOUNT_ID=""
-FABRIC_USER_ID=""
 TELEGRAM_GROUP_ID=""
 TOPIC_DISCOVERY=""
 TOPIC_JOURNAL=""
@@ -28,60 +23,84 @@ WORKSPACE="${OPENCLAW_WORKSPACE:-$HOME/.openclaw/workspace}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --agent-name) AGENT_NAME="$2"; shift 2 ;;
-    --user-name) USER_NAME="$2"; shift 2 ;;
     --timezone) TIMEZONE="$2"; shift 2 ;;
     --location) LOCATION="$2"; shift 2 ;;
-    --fabric-api-key) FABRIC_API_KEY="$2"; shift 2 ;;
-    --fabric-account-id) FABRIC_ACCOUNT_ID="$2"; shift 2 ;;
-    --fabric-user-id) FABRIC_USER_ID="$2"; shift 2 ;;
     --telegram-group-id) TELEGRAM_GROUP_ID="$2"; shift 2 ;;
     --topic-discovery) TOPIC_DISCOVERY="$2"; shift 2 ;;
     --topic-journal) TOPIC_JOURNAL="$2"; shift 2 ;;
     --topic-booking) TOPIC_BOOKING="$2"; shift 2 ;;
     --topic-memory) TOPIC_MEMORY="$2"; shift 2 ;;
     --workspace) WORKSPACE="$2"; shift 2 ;;
+    -h|--help)
+      echo "Usage: ./bootstrap.sh [options]"
+      echo ""
+      echo "Options:"
+      echo "  --timezone \"America/New_York\"    IANA timezone (auto-detected if omitted)"
+      echo "  --location \"New York\"            User's city (derived from timezone if omitted)"
+      echo "  --workspace /path                OpenClaw workspace path (default: ~/.openclaw/workspace)"
+      echo ""
+      echo "Optional Telegram flags:"
+      echo "  --telegram-group-id \"-100xxxxxxxxxx\""
+      echo "  --topic-discovery \"3\""
+      echo "  --topic-journal \"5\""
+      echo "  --topic-booking \"7\""
+      echo "  --topic-memory \"9\""
+      echo ""
+      echo "Prerequisites:"
+      echo "  - OpenClaw installed and gateway running"
+      echo "  - Fabric credentials in \$WORKSPACE/.env.fabric (FABRIC_API_KEY, FABRIC_USER_ID)"
+      exit 0
+      ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
   esac
 done
 
-# ─── Validate Required Args ──────────────────────────────────────
+# ─── Auto-detect timezone if not specified ────────────────────────
 
-MISSING=()
-[ -z "$AGENT_NAME" ] && MISSING+=("--agent-name")
-[ -z "$USER_NAME" ] && MISSING+=("--user-name")
-[ -z "$TIMEZONE" ] && MISSING+=("--timezone")
-[ -z "$FABRIC_API_KEY" ] && MISSING+=("--fabric-api-key")
-[ -z "$FABRIC_USER_ID" ] && MISSING+=("--fabric-user-id")
-[ -z "$TELEGRAM_GROUP_ID" ] && MISSING+=("--telegram-group-id")
-[ -z "$TOPIC_DISCOVERY" ] && MISSING+=("--topic-discovery")
-[ -z "$TOPIC_JOURNAL" ] && MISSING+=("--topic-journal")
-[ -z "$TOPIC_BOOKING" ] && MISSING+=("--topic-booking")
-[ -z "$TOPIC_MEMORY" ] && MISSING+=("--topic-memory")
-
-if [ ${#MISSING[@]} -gt 0 ]; then
-  echo -e "${RED}Missing required arguments:${NC}"
-  for m in "${MISSING[@]}"; do echo "  $m"; done
-  echo ""
-  echo "Usage: ./bootstrap.sh \\"
-  echo "  --agent-name \"Luna\" \\"
-  echo "  --user-name \"Sarah\" \\"
-  echo "  --timezone \"America/New_York\" \\"
-  echo "  --location \"New York\" \\"
-  echo "  --fabric-api-key \"fab_xxx\" \\"
-  echo "  --fabric-account-id \"acc_xxx\" \\"
-  echo "  --fabric-user-id \"usr_xxx\" \\"
-  echo "  --telegram-group-id \"-100xxxxxxxxxx\" \\"
-  echo "  --topic-discovery \"3\" \\"
-  echo "  --topic-journal \"5\" \\"
-  echo "  --topic-booking \"7\" \\"
-  echo "  --topic-memory \"9\""
-  exit 1
+if [ -z "$TIMEZONE" ]; then
+  if command -v timedatectl &>/dev/null; then
+    TIMEZONE=$(timedatectl show -p Timezone --value 2>/dev/null || echo "")
+  fi
+  if [ -z "$TIMEZONE" ] && [ -f /etc/timezone ]; then
+    TIMEZONE=$(cat /etc/timezone)
+  fi
+  if [ -z "$TIMEZONE" ]; then
+    echo -e "${RED}Could not auto-detect timezone. Please specify: --timezone \"America/New_York\"${NC}"
+    exit 1
+  fi
+  echo -e "  ${BLUE}ℹ${NC}  Auto-detected timezone: ${GREEN}$TIMEZONE${NC}"
 fi
 
-# Derive slugs (lowercase, hyphens)
-USER_SLUG=$(echo "$USER_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-AGENT_SLUG=$(echo "$AGENT_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+# ─── Validate Fabric credentials exist ────────────────────────────
+
+if [ ! -f "$WORKSPACE/.env.fabric" ]; then
+  echo -e "${YELLOW}⚠  No .env.fabric found at $WORKSPACE/.env.fabric${NC}"
+  echo -e "  Create it with: nano $WORKSPACE/.env.fabric"
+  echo ""
+  echo "    FABRIC_API_KEY=<your_fabric_api_key>"
+  echo "    FABRIC_USER_ID=<your_fabric_user_id>"
+  echo "    OPENAI_API_KEY=<your_openai_api_key>"
+  echo ""
+  echo -e "  Continuing without Fabric — memory bootstrapping will be skipped."
+  FABRIC_AVAILABLE=false
+else
+  FABRIC_AVAILABLE=true
+  # shellcheck disable=SC1091
+  source "$WORKSPACE/.env.fabric"
+  if [ -z "${FABRIC_API_KEY:-}" ] || [ -z "${FABRIC_USER_ID:-}" ]; then
+    echo -e "  ${YELLOW}⚠${NC} .env.fabric found but FABRIC_API_KEY or FABRIC_USER_ID is empty"
+    FABRIC_AVAILABLE=false
+  else
+    echo -e "  ${GREEN}✓${NC} Fabric credentials found"
+  fi
+  if [ -n "${OPENAI_API_KEY:-}" ]; then
+    echo -e "  ${GREEN}✓${NC} OpenAI API key found"
+    export OPENAI_API_KEY
+  else
+    echo -e "  ${YELLOW}⚠${NC} No OPENAI_API_KEY — profile builder will not be available"
+  fi
+fi
+
 SETUP_DATE=$(date -u '+%Y-%m-%d')
 LOCATION="${LOCATION:-$(echo "$TIMEZONE" | sed 's|.*/||' | tr '_' ' ')}"
 
@@ -91,33 +110,31 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║     OpenClaw Starter Template — Bootstrap    ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  Agent:     ${GREEN}$AGENT_NAME${NC} ($AGENT_SLUG)"
-echo -e "  User:      ${GREEN}$USER_NAME${NC} ($USER_SLUG)"
 echo -e "  Timezone:  ${GREEN}$TIMEZONE${NC}"
 echo -e "  Location:  ${GREEN}$LOCATION${NC}"
 echo -e "  Workspace: ${GREEN}$WORKSPACE${NC}"
+echo -e "  Fabric:    ${GREEN}$FABRIC_AVAILABLE${NC}"
 echo ""
 
 # ─── Step 1: Create Memory Folder Structure ──────────────────────
 
-echo -e "${YELLOW}[1/8] Creating memory folder structure...${NC}"
+echo -e "${YELLOW}[1/7] Creating memory folder structure...${NC}"
 
-mkdir -p "$WORKSPACE/memory/$USER_SLUG"
-mkdir -p "$WORKSPACE/memory/$AGENT_SLUG/discoveries"
-mkdir -p "$WORKSPACE/memory/$AGENT_SLUG/bookings"
+mkdir -p "$WORKSPACE/memory/user"
+mkdir -p "$WORKSPACE/memory/agent/discoveries"
+mkdir -p "$WORKSPACE/memory/agent/bookings"
 mkdir -p "$WORKSPACE/memory/shared/daily"
 mkdir -p "$WORKSPACE/memory/shared/diffs"
 mkdir -p "$WORKSPACE/memory/shared/diffs/applied"
 mkdir -p "$WORKSPACE/memory/topics"
 mkdir -p "$WORKSPACE/memory/instagram"
-mkdir -p "$WORKSPACE/scripts"
 
 # Create empty fabric-latest.md
 touch "$WORKSPACE/memory/fabric-latest.md"
 
-echo -e "  ${GREEN}✓${NC} memory/$USER_SLUG/"
-echo -e "  ${GREEN}✓${NC} memory/$AGENT_SLUG/discoveries/"
-echo -e "  ${GREEN}✓${NC} memory/$AGENT_SLUG/bookings/"
+echo -e "  ${GREEN}✓${NC} memory/user/"
+echo -e "  ${GREEN}✓${NC} memory/agent/discoveries/"
+echo -e "  ${GREEN}✓${NC} memory/agent/bookings/"
 echo -e "  ${GREEN}✓${NC} memory/shared/daily/"
 echo -e "  ${GREEN}✓${NC} memory/shared/diffs/"
 echo -e "  ${GREEN}✓${NC} memory/topics/"
@@ -127,17 +144,13 @@ echo -e "  ${GREEN}✓${NC} memory/fabric-latest.md"
 # ─── Step 2: Copy & Replace Template Files ───────────────────────
 
 echo ""
-echo -e "${YELLOW}[2/8] Copying template files...${NC}"
+echo -e "${YELLOW}[2/7] Copying template files...${NC}"
 
 TEMPLATES=(SOUL.md IDENTITY.md USER.md AGENTS.md MEMORY.md HEARTBEAT.md TOOLS.md)
 
 for tmpl in "${TEMPLATES[@]}"; do
   if [ -f "$SCRIPT_DIR/templates/$tmpl" ]; then
     sed \
-      -e "s|{{agent_name}}|$AGENT_NAME|g" \
-      -e "s|{{agent_slug}}|$AGENT_SLUG|g" \
-      -e "s|{{user_name}}|$USER_NAME|g" \
-      -e "s|{{user_slug}}|$USER_SLUG|g" \
       -e "s|{{timezone}}|$TIMEZONE|g" \
       -e "s|{{location}}|$LOCATION|g" \
       -e "s|{{setup_date}}|$SETUP_DATE|g" \
@@ -154,7 +167,7 @@ done
 # ─── Step 3: Install Skills ─────────────────────────────────────
 
 echo ""
-echo -e "${YELLOW}[3/8] Installing skills...${NC}"
+echo -e "${YELLOW}[3/7] Installing skills...${NC}"
 
 # Copy bundled skills
 for skill_dir in "$SCRIPT_DIR/skills"/*/; do
@@ -164,64 +177,29 @@ for skill_dir in "$SCRIPT_DIR/skills"/*/; do
   echo -e "  ${GREEN}✓${NC} skills/$skill_name/"
 done
 
-# Install opentable-booking from ClawHub ZIP
-OPENTABLE_URL="https://wry-manatee-359.convex.site/api/v1/download?slug=opentable-booking"
-OPENTABLE_DIR="$WORKSPACE/skills/opentable-booking"
-if [ ! -f "$OPENTABLE_DIR/SKILL.md" ]; then
-  echo -e "  Downloading opentable-booking from ClawHub..."
-  mkdir -p "$OPENTABLE_DIR"
-  TMPZIP=$(mktemp /tmp/opentable-booking-XXXXXX.zip)
-  if curl -sL "$OPENTABLE_URL" -o "$TMPZIP" && unzip -qo "$TMPZIP" -d "$OPENTABLE_DIR" 2>/dev/null; then
-    # Unzip may create a nested dir — flatten if needed
-    if [ -d "$OPENTABLE_DIR/opentable-booking" ]; then
-      mv "$OPENTABLE_DIR/opentable-booking"/* "$OPENTABLE_DIR/"
-      rmdir "$OPENTABLE_DIR/opentable-booking"
-    fi
-    echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (ClawHub)"
-  else
-    echo -e "  ${YELLOW}⚠${NC} opentable-booking download failed — install manually later"
-  fi
-  rm -f "$TMPZIP"
-else
-  echo -e "  ${GREEN}✓${NC} skills/opentable-booking/ (already installed)"
-fi
-
-# ─── Step 4: Store Fabric Credentials ───────────────────────────
+# ─── Step 4: Bootstrap from Fabric Data ──────────────────────────
 
 echo ""
-echo -e "${YELLOW}[4/8] Storing Fabric credentials...${NC}"
+echo -e "${YELLOW}[4/7] Bootstrapping memory from Fabric data...${NC}"
 
-cat > "$WORKSPACE/.env.fabric" <<EOF
-FABRIC_API_KEY=$FABRIC_API_KEY
-FABRIC_ACCOUNT_ID=${FABRIC_ACCOUNT_ID:-}
-FABRIC_USER_ID=$FABRIC_USER_ID
-EOF
-chmod 600 "$WORKSPACE/.env.fabric"
-echo -e "  ${GREEN}✓${NC} .env.fabric (chmod 600)"
-
-# ─── Step 5: Bootstrap from Fabric Data ─────────────────────────
-
-echo ""
-echo -e "${YELLOW}[5/8] Bootstrapping memory from Fabric data...${NC}"
-
-if [ -f "$SCRIPT_DIR/scripts/bootstrap-fabric.py" ]; then
+if [ "$FABRIC_AVAILABLE" = true ] && [ -f "$SCRIPT_DIR/scripts/bootstrap-fabric.py" ]; then
   python3 "$SCRIPT_DIR/scripts/bootstrap-fabric.py" \
     --api-key "$FABRIC_API_KEY" \
     --user-id "$FABRIC_USER_ID" \
-    --user-name "$USER_NAME" \
-    --user-slug "$USER_SLUG" \
+    --user-name "" \
+    --user-slug "user" \
     --workspace "$WORKSPACE" \
     --timezone "$TIMEZONE" \
     --location "$LOCATION" && \
     echo -e "  ${GREEN}✓${NC} Memory files generated from Fabric data" || \
     echo -e "  ${YELLOW}⚠${NC} Fabric bootstrap failed — memory files will be empty stubs"
 else
-  echo -e "  ${YELLOW}⚠${NC} bootstrap-fabric.py not found — creating empty memory stubs"
+  echo -e "  ${YELLOW}ℹ${NC}  Creating empty memory stubs (Fabric not available or script not found)"
   for f in interests.md restaurants.md fashion.md travel.md relationships.md work.md; do
     title=$(echo "$f" | sed 's/.md//' | sed 's/^./\U&/')
-    echo "# $title" > "$WORKSPACE/memory/$USER_SLUG/$f"
-    echo "" >> "$WORKSPACE/memory/$USER_SLUG/$f"
-    echo "(To be populated from Fabric data or manually)" >> "$WORKSPACE/memory/$USER_SLUG/$f"
+    echo "# $title" > "$WORKSPACE/memory/user/$f"
+    echo "" >> "$WORKSPACE/memory/user/$f"
+    echo "(To be populated from Fabric data or manually)" >> "$WORKSPACE/memory/user/$f"
   done
   # Also create topic dedup files
   for f in food.md lifestyle.md travel.md interests.md; do
@@ -230,10 +208,10 @@ else
   done
 fi
 
-# ─── Step 6: Install Browser (Chrome + Xvfb) ────────────────────
+# ─── Step 5: Install Browser (Chrome + Xvfb) ────────────────────
 
 echo ""
-echo -e "${YELLOW}[6/8] Setting up browser (Chrome + Xvfb)...${NC}"
+echo -e "${YELLOW}[5/7] Setting up browser (Chrome + Xvfb)...${NC}"
 
 # Install Xvfb if not present
 if ! command -v Xvfb &>/dev/null; then
@@ -303,16 +281,18 @@ else
   echo -e "  ${GREEN}✓${NC} Gateway DISPLAY drop-in already exists"
 fi
 
-# ─── Step 7: Create Cron Jobs ───────────────────────────────────
+# ─── Step 6: Create Cron Jobs ───────────────────────────────────
 
 echo ""
-echo -e "${YELLOW}[7/8] Creating cron jobs...${NC}"
+echo -e "${YELLOW}[6/7] Creating cron jobs...${NC}"
 
 # Check if openclaw CLI is available
 if command -v openclaw &>/dev/null; then
   OPENCLAW_CMD="openclaw"
 elif [ -f "$HOME/.local/share/fnm/node-versions/v24.14.1/installation/bin/openclaw" ]; then
   OPENCLAW_CMD="$HOME/.local/share/fnm/node-versions/v24.14.1/installation/bin/openclaw"
+elif [ -f "$HOME/.npm-global/bin/openclaw" ]; then
+  OPENCLAW_CMD="$HOME/.npm-global/bin/openclaw"
 else
   OPENCLAW_CMD=""
 fi
@@ -327,27 +307,78 @@ if [ -n "$OPENCLAW_CMD" ]; then
     sleep 2
   done
 
-  # Evening discovery — 6pm daily
-  $OPENCLAW_CMD cron add \
-    --name "evening-discovery" \
-    --cron "0 18 * * *" \
-    --tz "$TIMEZONE" \
-    --session isolated \
-    --message "Read and follow the discovery skill: skills/discovery/SKILL.md" \
-    --announce >/dev/null 2>&1 && \
-    echo -e "  ${GREEN}✓${NC} evening-discovery (6pm $TIMEZONE)" || \
-    echo -e "  ${YELLOW}⚠${NC} evening-discovery — failed (create manually)"
+  # ─── Auto-detect Telegram chat ID if not provided ──────────────
+  if [ -z "$TELEGRAM_GROUP_ID" ]; then
+    OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
 
-  # Nightly journal — 10pm daily
-  $OPENCLAW_CMD cron add \
-    --name "nightly-journal" \
-    --cron "0 22 * * *" \
-    --tz "$TIMEZONE" \
-    --session isolated \
-    --message "Read and follow the journal skill: skills/journal/SKILL.md" \
-    --announce >/dev/null 2>&1 && \
-    echo -e "  ${GREEN}✓${NC} nightly-journal (10pm $TIMEZONE)" || \
-    echo -e "  ${YELLOW}⚠${NC} nightly-journal — failed (create manually)"
+    # Method 1: Check existing session history for a Telegram chat
+    SESSIONS_FILE="$OPENCLAW_STATE_DIR/agents/main/sessions/sessions.json"
+    if [ -f "$SESSIONS_FILE" ]; then
+      DETECTED_CHAT_ID=$(python3 -c "
+import json, sys
+with open('$SESSIONS_FILE') as f:
+    data = json.load(f)
+for key, sess in data.items():
+    origin = sess.get('origin', {})
+    if origin.get('provider') == 'telegram' and origin.get('chatType') == 'direct':
+        # Extract numeric chat ID from the session key or origin
+        from_id = origin.get('from', '').replace('telegram:', '')
+        if from_id.isdigit():
+            print(from_id)
+            sys.exit(0)
+sys.exit(1)
+" 2>/dev/null)
+
+      if [ -n "$DETECTED_CHAT_ID" ]; then
+        TELEGRAM_GROUP_ID="$DETECTED_CHAT_ID"
+        echo -e "  ${GREEN}✓${NC} Auto-detected Telegram chat ID from session history: ${GREEN}$TELEGRAM_GROUP_ID${NC}"
+      fi
+    fi
+
+    # Method 2: Try the Telegram Bot API getUpdates
+    if [ -z "$TELEGRAM_GROUP_ID" ]; then
+      OPENCLAW_CONFIG="$OPENCLAW_STATE_DIR/openclaw.json"
+      if [ -f "$OPENCLAW_CONFIG" ]; then
+        BOT_TOKEN=$(python3 -c "
+import json
+with open('$OPENCLAW_CONFIG') as f:
+    data = json.load(f)
+print(data.get('telegram', {}).get('botToken', ''))
+" 2>/dev/null)
+
+        if [ -n "$BOT_TOKEN" ]; then
+          DETECTED_CHAT_ID=$(curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=50" 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for update in data.get('result', []):
+    msg = update.get('message', {})
+    chat = msg.get('chat', {})
+    if chat.get('type') == 'private' and chat.get('id'):
+        print(chat['id'])
+        sys.exit(0)
+sys.exit(1)
+" 2>/dev/null)
+
+          if [ -n "$DETECTED_CHAT_ID" ]; then
+            TELEGRAM_GROUP_ID="$DETECTED_CHAT_ID"
+            echo -e "  ${GREEN}✓${NC} Auto-detected Telegram chat ID from Bot API: ${GREEN}$TELEGRAM_GROUP_ID${NC}"
+          fi
+        fi
+      fi
+    fi
+
+    if [ -z "$TELEGRAM_GROUP_ID" ]; then
+      echo -e "  ${YELLOW}ℹ${NC}  No Telegram chat ID found. Crons will run but won't deliver to Telegram."
+      echo -e "      To enable delivery later: message the bot on Telegram, then re-run bootstrap"
+      echo -e "      or pass --telegram-group-id <CHAT_ID>"
+    fi
+  fi
+
+  # Build announce + delivery flags if Telegram is configured
+  ANNOUNCE_FLAG=""
+  if [ -n "$TELEGRAM_GROUP_ID" ]; then
+    ANNOUNCE_FLAG="--announce --to $TELEGRAM_GROUP_ID"
+  fi
 
   # Fabric data refresh — 9am daily
   $OPENCLAW_CMD cron add \
@@ -359,18 +390,98 @@ if [ -n "$OPENCLAW_CMD" ]; then
     echo -e "  ${GREEN}✓${NC} fabric-refresh (9am $TIMEZONE)" || \
     echo -e "  ${YELLOW}⚠${NC} fabric-refresh — failed (create manually)"
 
+  # Memory review — 10am daily
+  $OPENCLAW_CMD cron add \
+    --name "memory-review" \
+    --cron "0 10 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} memory-review (10am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} memory-review — failed (create manually)"
+
+  # Fabric daily diff — 10:05am daily (after fabric-refresh at 9am)
+  $OPENCLAW_CMD cron add \
+    --name "fabric-daily-diff" \
+    --cron "5 10 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} fabric-daily-diff (10:05am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} fabric-daily-diff — failed (create manually)"
+
+  # Memory ingest — every 30min (silent, keeps semantic index current)
+  $OPENCLAW_CMD cron add \
+    --name "memory-ingest" \
+    --every "30m" \
+    --session isolated \
+    --no-deliver \
+    --message "Run openclaw memory index to keep the semantic memory index current. If no changes detected, do nothing." >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} memory-ingest (every 30min, silent)" || \
+    echo -e "  ${YELLOW}⚠${NC} memory-ingest — failed (create manually)"
+
+  # Evening discovery — 6pm daily
+  $OPENCLAW_CMD cron add \
+    --name "evening-discovery" \
+    --cron "0 18 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Read and follow the discovery skill: skills/discovery/SKILL.md" \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} evening-discovery (6pm $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} evening-discovery — failed (create manually)"
+
+  # Nightly journal — 10pm daily
+  $OPENCLAW_CMD cron add \
+    --name "nightly-journal" \
+    --cron "0 22 * * *" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Read and follow the journal skill: skills/journal/SKILL.md" \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} nightly-journal (10pm $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} nightly-journal — failed (create manually)"
+
+  # Weekly booking check — Sunday noon
+  $OPENCLAW_CMD cron add \
+    --name "weekly-booking-check" \
+    --cron "0 12 * * 0" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow." \
+    $ANNOUNCE_FLAG >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} weekly-booking-check (Sunday noon $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} weekly-booking-check — failed (create manually)"
+
+  # Weekly profile refresh — Sunday 8am
+  $OPENCLAW_CMD cron add \
+    --name "weekly-profile-refresh" \
+    --cron "0 8 * * 0" \
+    --tz "$TIMEZONE" \
+    --session isolated \
+    --message "Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md." >/dev/null 2>&1 && \
+    echo -e "  ${GREEN}✓${NC} weekly-profile-refresh (Sunday 8am $TIMEZONE)" || \
+    echo -e "  ${YELLOW}⚠${NC} weekly-profile-refresh — failed (create manually)"
+
 else
   echo -e "  ${YELLOW}⚠${NC} openclaw CLI not found — cron jobs must be created manually"
   echo -e "  ${BLUE}ℹ${NC}  After starting the gateway, run:"
-  echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce"
-  echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce"
   echo "    openclaw cron add --name fabric-refresh --cron '0 9 * * *' --tz '$TIMEZONE' --session isolated --message 'Fetch fresh Fabric data. Read skills/fabric/SKILL.md. Source .env.fabric, fetch last 24h, write to memory/fabric-latest.md.'"
+  echo "    openclaw cron add --name memory-review --cron '0 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Review recent daily session logs and propose MEMORY.md updates. Read and follow skills/memory-review/SKILL.md.'"
+  echo "    openclaw cron add --name fabric-daily-diff --cron '5 10 * * *' --tz '$TIMEZONE' --session isolated --message 'Analyze recent Fabric data and propose memory updates. Read and follow skills/fabric-memory-diff/SKILL.md.'"
+  echo "    openclaw cron add --name memory-ingest --every 30m --session isolated --no-deliver --message 'Run openclaw memory index to keep the semantic memory index current.'"
+  echo "    openclaw cron add --name evening-discovery --cron '0 18 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the discovery skill: skills/discovery/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'"
+  echo "    openclaw cron add --name nightly-journal --cron '0 22 * * *' --tz '$TIMEZONE' --session isolated --message 'Read and follow the journal skill: skills/journal/SKILL.md' --announce --to '<TELEGRAM_CHAT_ID>'"
+  echo "    openclaw cron add --name weekly-booking-check --cron '0 12 * * 0' --tz '$TIMEZONE' --session isolated --message 'Check if there are any upcoming dining plans or booking requests. Read skills/opentable-booking/SKILL.md for booking flow.'"
+    echo "    openclaw cron add --name weekly-profile-refresh --cron '0 8 * * 0' --tz '$TIMEZONE' --session isolated --message 'Refresh user profile from recent Fabric data and public sources. Read and follow skills/weekly-profile-refresh/SKILL.md.'"
 fi
 
-# ─── Step 8: Post-setup Login Reminder ──────────────────────────
+# ─── Step 7: Post-setup Checklist ────────────────────────────────
 
 echo ""
-echo -e "${YELLOW}[8/8] Post-setup checklist...${NC}"
+echo -e "${YELLOW}[7/7] Post-setup checklist...${NC}"
 
 cat > "$WORKSPACE/setup-checklist.md" <<CHECKLIST_EOF
 # Post-Bootstrap Checklist
@@ -395,14 +506,31 @@ openclaw cron list
 \`\`\`
 
 Expected:
+- fabric-refresh (9am ${TIMEZONE})
+- memory-review (10am ${TIMEZONE})
+- fabric-daily-diff (10:05am ${TIMEZONE})
+- memory-ingest (every 30min, silent)
 - evening-discovery (6pm ${TIMEZONE})
 - nightly-journal (10pm ${TIMEZONE})
-- fabric-refresh (9am ${TIMEZONE})
+- weekly-booking-check (Sunday noon ${TIMEZONE})
+- weekly-profile-refresh (Sunday 8am ${TIMEZONE})
 
 ## Review USER.md
 
 Check that the Fabric bootstrap generated a reasonable profile.
 Fill in any missing fields (name, timezone, location).
+
+## Build User Profile (Recommended)
+
+Run the profile builder for a comprehensive user profile:
+\`\`\`
+cd ~/.openclaw/workspace
+source .env.fabric
+python3 skills/fabric-profile-builder/scripts/run_pipeline.py \\
+  --output-dir /tmp/fabric-profile \\
+  --extraction-provider openai --extraction-model gpt-4o-mini \\
+  --synthesis-provider openai --synthesis-model gpt-4o
+\`\`\`
 CHECKLIST_EOF
 
 echo -e "  ${GREEN}✓${NC} setup-checklist.md written"
@@ -421,6 +549,6 @@ echo -e "  1. Restart the gateway: ${BLUE}systemctl --user restart openclaw-gate
 echo -e "  2. Start the browser: ${BLUE}openclaw browser start${NC}"
 echo -e "  3. Log into OpenTable (see ${BLUE}setup-checklist.md${NC})"
 echo -e "  4. Review ${BLUE}$WORKSPACE/USER.md${NC}"
-echo -e "  5. Edit ${BLUE}$WORKSPACE/SOUL.md${NC} — give your agent personality"
+echo -e "  5. Run the fabric-profile-builder for a comprehensive user profile"
 echo -e "  6. Tonight: first discoveries at 6pm, first journal at 10pm"
 echo ""

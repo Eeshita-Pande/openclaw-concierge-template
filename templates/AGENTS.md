@@ -55,7 +55,7 @@ When in doubt: Try Haiku first. Escalate when the task is complex.
 **At end of each session:**
 1. Append summary to `memory/shared/daily/YYYY-MM-DD.md`
 2. Include: key decisions, tool outputs, context worth remembering
-3. Update relevant `memory/{{agent_slug}}/` files if you did autonomous work
+3. Update relevant `memory/agent/` files if you did autonomous work
 4. Check if any Fabric diffs in `memory/shared/diffs/` need auto-approval (24h+ old)
 
 ## Memory
@@ -64,7 +64,7 @@ You wake up fresh each session. These files are your continuity:
 
 - **Daily notes:** `memory/shared/daily/YYYY-MM-DD.md` — session logs
 - **Long-term:** `MEMORY.md` — curated state
-- **Context:** `memory/{{user_slug}}/` — their ground truth (from Fabric)
+- **Context:** `memory/user/` — their ground truth (from Fabric)
 
 Capture what matters. Decisions, context, things to remember.
 
@@ -86,7 +86,7 @@ Capture what matters. Decisions, context, things to remember.
 
 Your memory is organized by **ownership** (who generated the context):
 
-### memory/{{user_slug}}/ — THEIR Context
+### memory/user/ — THEIR Context
 **What lives here:** Places they've been, things they own, books they've read, searches they ran
 **Source:** Fabric API (Instagram, Google), manual updates
 **Write access:** Fabric Diff cron job (auto-approve after 24h), manual edits
@@ -99,11 +99,11 @@ Your memory is organized by **ownership** (who generated the context):
 - `relationships.md` — People, connections
 - `work.md` — Professional context
 
-**CRITICAL:** NEVER write directly to `{{user_slug}}/` during sessions. ONLY via Fabric Diff job (auto-approve after 24h) unless they explicitly tell you to update something.
+**CRITICAL:** NEVER write directly to `user/` during sessions. ONLY via Fabric Diff job (auto-approve after 24h) unless they explicitly tell you to update something.
 
 ---
 
-### memory/{{agent_slug}}/ — YOUR Autonomous Work
+### memory/agent/ — YOUR Autonomous Work
 **What lives here:** Things you discovered, bookings you attempted
 **Source:** Your cron jobs, autonomous research, task execution
 
@@ -114,29 +114,47 @@ Your memory is organized by **ownership** (who generated the context):
 ---
 
 ### memory/shared/ — Collaborative Context
-**What lives here:** Daily session logs, joint decisions, Fabric proposals
+**What lives here:** Daily session logs, joint decisions, memory update proposals pending review
 
 **Folders:**
-- `daily/` — Daily session logs
-- `diffs/` — Fabric proposals awaiting approval
+- `daily/` — Daily session logs (append at end of session)
+  - Format: `YYYY-MM-DD.md`
+  - Contents: Session summaries, key decisions, context worth remembering
+- `diffs/` — Memory update proposals awaiting approval
+  - `fabric-YYYY-MM-DD.md` — Fabric data analysis proposals (from `fabric-daily-diff` cron)
+  - `YYYY-MM-DD-proposed.md` — Memory review proposals (from `memory-review` cron)
+  - Auto-approve after 24h veto window unless user replies with edits/vetoes
+- `diffs/applied/` — Archive of applied proposals
 
 ---
 
 ### Memory Protocol (Session End)
 1. Append summary to `shared/daily/YYYY-MM-DD.md`
-2. Update relevant `{{agent_slug}}/` files if you did autonomous work
-3. Check if any Fabric diffs in `shared/diffs/` need auto-approval (24h+ old)
+2. Update relevant `agent/` files if you did autonomous work
+3. Check if any proposals in `shared/diffs/` need auto-approval (24h+ old)
+
+### Diff Approval Workflow
+Memory updates to `user/` files happen through a proposal system, not direct writes:
+1. Cron jobs (`fabric-daily-diff`, `memory-review`) analyze data and write proposals to `shared/diffs/`
+2. Proposals include conflict checks and rationale
+3. User has 24h to review, edit, or veto
+4. After 24h with no response, proposals are auto-approved and applied
+5. Applied proposals are moved to `shared/diffs/applied/`
+
+**CRITICAL:** NEVER write directly to `user/` during sessions. ONLY via the diff/proposal workflow unless the user explicitly tells you to update something manually.
 
 ## Discovery Curation Protocol
 
 **When recommending anything:**
 
-1. **ALWAYS check `memory/{{user_slug}}/` first** to avoid duplicates
+1. **ALWAYS check `memory/user/` first** to avoid duplicates
 2. **Filter before suggesting** — Never recommend somewhere they've already been
-3. **Record your suggestions** in `memory/{{agent_slug}}/discoveries/YYYY-MM-DD.md`
+3. **Record your suggestions** in `memory/agent/discoveries/YYYY-MM-DD.md`
 4. **Quality > quantity**
 
 ## Platform-Specific: Telegram
+
+If Telegram is configured, route messages to the appropriate topics:
 
 **Session Topics:**
 - General → default topic (no ID)
@@ -144,6 +162,8 @@ Your memory is organized by **ownership** (who generated the context):
 - Journal reflections → topic:{{topic_journal}}
 - Booking confirmations → topic:{{topic_booking}}
 - Memory/Fabric diffs → topic:{{topic_memory}}
+
+If topic IDs are empty, deliver all messages to the default/general topic or skip Telegram delivery.
 
 ## Safety
 

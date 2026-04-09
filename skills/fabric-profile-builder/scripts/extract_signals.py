@@ -26,6 +26,28 @@ CATEGORIES = [
     "sport", "health", "entertainment", "shopping", "values",
 ]
 
+# Interaction weights: higher = stronger signal of user intent/identity
+INTERACTION_WEIGHTS = {
+    "instagram_stories": 5,   # User actively created this — highest signal
+    "instagram_posts": 5,     # User actively created this
+    "google_lens": 4,         # User pointed camera at something — intentional
+    "google_shopping": 3,     # Active purchase intent
+    "google_search": 3,       # Active curiosity
+    "google_image_search": 2, # Moderate intent
+    "google_video_search": 2, # Moderate intent
+    "google_discover": 1,     # Passive — algorithm surfaced this
+    "google_youtube": 1,      # Often passive consumption / autoplay
+}
+
+# Weight labels for the LLM prompt
+WEIGHT_LABELS = {
+    5: "CREATED",   # User produced this content
+    4: "INTENT",    # Deliberate physical-world action
+    3: "ACTIVE",    # Deliberate digital action
+    2: "MODERATE",  # Moderate intent
+    1: "PASSIVE",   # Algorithm-driven or passive consumption
+}
+
 TYPE_DESCRIPTIONS = {
     "google_youtube": "YouTube activity: videos viewed and liked, with titles and creator names",
     "google_search": "Google searches: queries the user typed into Google Search",
@@ -46,10 +68,12 @@ def compact_thread(thread: dict) -> dict | None:
     attributed = obj.get("attributedTo", {})
     itype = thread.get("interaction_type", "")
 
+    weight = INTERACTION_WEIGHTS.get(itype, 1)
     compact = {
         "type": itype,
         "date": thread.get("asat", "")[:10],
         "action": payload.get("type", payload.get("fibreKind", "")),
+        "weight": weight,
     }
 
     if "youtube" in itype:
@@ -83,31 +107,33 @@ def compact_thread(thread: dict) -> dict | None:
 
 
 def format_interaction(compact: dict) -> str:
-    """Format a compact thread for the LLM prompt."""
+    """Format a compact thread for the LLM prompt, with weight label."""
     date = compact.get("date", "????-??-??")
     itype = compact.get("type", "")
+    weight = compact.get("weight", 1)
+    label = WEIGHT_LABELS.get(weight, "PASSIVE")
 
     if "youtube" in itype:
         action = compact.get("action", "View")
         title = compact.get("title", "")
         creator = compact.get("creator", "")
         suffix = f' by {creator}' if creator else ''
-        return f'- [{date}] {action}: "{title}"{suffix}'
+        return f'- [{label}] [{date}] {action}: "{title}"{suffix}'
 
     elif any(k in itype for k in ["search", "discover", "lens", "shopping"]):
-        label = "Shopping" if "shopping" in itype else "Search"
+        kind = "Shopping" if "shopping" in itype else "Search"
         if "lens" in itype:
-            label = "Lens"
+            kind = "Lens"
         if "discover" in itype:
-            label = "Discover"
-        return f'- [{date}] {label}: "{compact.get("query", "")}"'
+            kind = "Discover"
+        return f'- [{label}] [{date}] {kind}: "{compact.get("query", "")}"'
 
     elif "instagram" in itype:
         kind = "Story" if "stories" in itype else "Post"
-        return f'- [{date}] {kind}: "{compact.get("description", "")}"'
+        return f'- [{label}] [{date}] {kind}: "{compact.get("description", "")}"'
 
     else:
-        return f'- [{date}] {compact.get("action", "")}: "{compact.get("text", "")}"'
+        return f'- [{label}] [{date}] {compact.get("action", "")}: "{compact.get("text", "")}"'
 
 
 def build_extraction_prompt(compacted_batch: list[dict]) -> str:
@@ -122,7 +148,15 @@ def build_extraction_prompt(compacted_batch: list[dict]) -> str:
 
     formatted = "\n".join(format_interaction(c) for c in compacted_batch)
 
-    return f"""Analyze these digital interactions and extract interest signals — recurring topics, content patterns, and behavioral indicators. For each signal, note its category and a brief description.
+    return f"""Extract FACTUAL OBSERVATIONS about this person from their digital activity.
+Each observation should be specific, evidence-grounded, and name real people/places/brands/creators where visible.
+
+Each interaction is tagged with an intent level:
+- [CREATED] = content the user PRODUCED (Instagram stories/posts) — strongest identity signal, weight 5x
+- [INTENT] = deliberate physical-world action (Google Lens) — weight 4x
+- [ACTIVE] = deliberate digital action (searches, shopping) — weight 3x
+- [MODERATE] = moderate intent (image/video search) — weight 2x
+- [PASSIVE] = algorithm-surfaced or passive consumption (Discover, YouTube autoplay) — weight 1x
 
 The data includes:
 {type_desc_text}
@@ -130,18 +164,30 @@ The data includes:
 Return ONLY valid JSON:
 {{
   "signals": [
-    {{"category": "<category>", "signal": "<description>", "strength": "low|medium|high"}}
+    {{
+      "category": "<category>",
+      "observation": "<specific factual statement with names/places/brands>",
+      "evidence_count": <number of interactions supporting this>,
+      "depth": "identity|active|casual|passive"
+    }}
   ]
 }}
 
 Categories: {', '.join(CATEGORIES)}
 
+Depth levels:
+- identity: User-created content or deep repeated engagement across multiple sources
+- active: Deliberate searches, shopping, multiple interactions on the same specific topic
+- casual: A few searches or views, not sustained
+- passive: Algorithm-surfaced, autoplay, single occurrence
+
 Rules:
-- Only extract clear signals supported by the data
-- Group similar items into one signal (not one per interaction)
-- Strength: high = repeated/liked/actively created, medium = several occurrences, low = one-off
-- If a batch has no clear signals for a category, skip it
-- Keep signals concise (1 sentence each)
+- Be SPECIFIC: include real names, places, brands, creators, titles from the data. BAD: "Interested in Italian food". GOOD: "Searched for restaurants in Bologna 3 times; watched pasta-making videos by specific creators"
+- Group related interactions into ONE observation — if 10 searches relate to the same topic, that's one observation with evidence_count=10
+- [CREATED] and [INTENT] items are far more significant than [PASSIVE] — a single Instagram story about a place tells you more than 10 autoplay YouTube videos
+- Do NOT list individual interactions — synthesize them into facts about the person
+- If a batch has no clear observations for a category, skip it
+- Only extract observations supported by the data — do not speculate
 
 Interactions:
 {formatted}"""
@@ -153,7 +199,7 @@ def extract_batch(client, batch: list[dict], batch_idx: int) -> dict:
 
     for attempt in range(2):
         try:
-            text = client.complete(prompt, max_tokens=2048, temperature=0.1)
+            text = client.complete(prompt, max_tokens=4096, temperature=0.1)
 
             # Try to parse JSON — handle markdown code blocks
             if text.startswith("```"):
